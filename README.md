@@ -16,7 +16,7 @@ Pick whichever fits your environment. All paths land at the same versioned binar
 ### One-line installer (curl, recommended)
 
 ```bash
-curl -fsSL https://github.com/liaison-cloud/cli/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/liaisonio/cli/releases/latest/download/install.sh | sh
 ```
 
 Auto-detects OS/arch, verifies SHA256, drops the binary in `~/.local/bin` (or
@@ -27,10 +27,10 @@ Auto-detects OS/arch, verifies SHA256, drops the binary in `~/.local/bin` (or
 
 ```bash
 # Run once without installing
-npx @liaison-cloud/cli edge list
+npx @liaisonio/cli edge list
 
 # Or install globally
-npm i -g @liaison-cloud/cli
+npm i -g @liaisonio/cli
 liaison edge list
 ```
 
@@ -40,7 +40,7 @@ from the GitHub release on `postinstall`, verifies its SHA256, and execs it.
 ### Go install
 
 ```bash
-go install github.com/liaison-cloud/cli/cmd/liaison@latest
+go install github.com/liaisonio/cli/cmd/liaison@latest
 ```
 
 Requires Go 1.22+. Best for Go developers who already have `$GOPATH/bin` in their PATH.
@@ -48,7 +48,7 @@ Requires Go 1.22+. Best for Go developers who already have `$GOPATH/bin` in thei
 ### Build from source
 
 ```bash
-git clone https://github.com/liaison-cloud/cli
+git clone https://github.com/liaisonio/cli
 cd cli
 make build           # ./bin/liaison           (current platform)
 make release         # ./dist/liaison-*        (all 5 platforms + SHA256SUMS)
@@ -154,13 +154,13 @@ If you are an LLM agent, here's the minimal path:
 
 ```bash
 # Option 1: npx — no install, works in any node-equipped sandbox
-npx -y @liaison-cloud/cli@latest <command>
+npx -y @liaisonio/cli@latest <command>
 
 # Option 2: curl one-liner — works on any unix shell with curl
-curl -fsSL https://github.com/liaison-cloud/cli/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/liaisonio/cli/releases/latest/download/install.sh | sh
 
 # Option 3: go install — if Go toolchain is already present
-go install github.com/liaison-cloud/cli/cmd/liaison@latest
+go install github.com/liaisonio/cli/cmd/liaison@latest
 ```
 
 **Authenticate**:

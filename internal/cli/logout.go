@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/liaison-cloud/cli/internal/config"
+	"github.com/liaisonio/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

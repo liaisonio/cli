@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 //
 // Entry point listed in package.json "bin". This file is what `npx
-// @liaison-cloud/cli ...` and the symlinked `liaison` command both call.
+// @liaisonio/cli ...` and the symlinked `liaison` command both call.
 //
 // All it does is locate the platform-specific Go binary that was downloaded
 // during `postinstall` (see scripts/install.js) and exec it, forwarding
@@ -43,7 +43,7 @@ if (!fs.existsSync(binaryPath)) {
   fail(
     `binary not found at ${binaryPath}.\n` +
       'This usually means the postinstall download was skipped or failed.\n' +
-      'Try: npm rebuild @liaison-cloud/cli  (or `npm install` again with --foreground-scripts)',
+      'Try: npm rebuild @liaisonio/cli  (or `npm install` again with --foreground-scripts)',
   );
 }
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/liaison-cloud/cli/internal/cli"
+	"github.com/liaisonio/cli/internal/cli"
 )
 
 func main() {

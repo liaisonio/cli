@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/liaison-cloud/cli/internal/client"
-	"github.com/liaison-cloud/cli/internal/config"
+	"github.com/liaisonio/cli/internal/client"
+	"github.com/liaisonio/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

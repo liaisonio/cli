@@ -1,4 +1,4 @@
-module github.com/liaison-cloud/cli
+module github.com/liaisonio/cli
 
 go 1.22
 

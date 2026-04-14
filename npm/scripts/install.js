@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// Postinstall hook for @liaison-cloud/cli.
+// Postinstall hook for @liaisonio/cli.
 //
 // Downloads the platform-specific Go binary from the matching GitHub release
 // and verifies its SHA256 against the published SHA256SUMS file. The binary is
@@ -23,7 +23,7 @@ const crypto = require('crypto');
 
 const pkg = require('../package.json');
 const VERSION = `v${pkg.version}`;
-const REPO = 'liaison-cloud/cli';
+const REPO = 'liaisonio/cli';
 const RELEASE_BASE = `https://github.com/${REPO}/releases/download/${VERSION}`;
 
 // process.platform-process.arch → release asset GOOS-GOARCH suffix.

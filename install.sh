@@ -16,7 +16,7 @@
 
 set -eu
 
-RELEASE_BASE="${LIAISON_CLI_RELEASE_BASE:-https://github.com/liaison-cloud/cli/releases}"
+RELEASE_BASE="${LIAISON_CLI_RELEASE_BASE:-https://github.com/liaisonio/cli/releases}"
 VERSION="${LIAISON_CLI_VERSION:-latest}"
 INSTALL_DIR="${LIAISON_CLI_INSTALL_DIR:-}"
 BINARY_NAME="liaison"

@@ -1,5 +1,5 @@
 BINARY  := liaison
-MODULE  := github.com/liaison-cloud/cli
+MODULE  := github.com/liaisonio/cli
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X $(MODULE)/internal/cli.Version=$(VERSION) -s -w
 

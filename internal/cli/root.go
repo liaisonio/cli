@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/liaison-cloud/cli/internal/client"
-	"github.com/liaison-cloud/cli/internal/config"
-	"github.com/liaison-cloud/cli/internal/output"
+	"github.com/liaisonio/cli/internal/client"
+	"github.com/liaisonio/cli/internal/config"
+	"github.com/liaisonio/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

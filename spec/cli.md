@@ -7,7 +7,7 @@ agent 被越来越多地用来执行运维任务，我们需要一个**供 agent
 入口。Web UI 要求浏览器 + 滑块验证码 + 人类操作，agent 无法使用；后端虽然提供
 REST API，但每个 agent 都要自己封装 HTTP + 认证 + 错误处理，重复而且容易出错。
 
-本 spec 描述一个独立仓库 `github.com/liaison-cloud/cli` 中的命令行工具，作为
+本 spec 描述一个独立仓库 `github.com/liaisonio/cli` 中的命令行工具，作为
 liaison-cloud 的标准自动化入口。
 
 ---
@@ -273,7 +273,7 @@ liaison-cli/
 ├── spec/cli.md                     # 本文档
 ├── Makefile                        # build / install / test
 ├── README.md                       # 用户 & agent 使用文档
-├── go.mod                          # module github.com/liaison-cloud/cli
+├── go.mod                          # module github.com/liaisonio/cli
 └── .gitignore
 ```
 
@@ -305,7 +305,7 @@ viper（只用环境变量和 YAML，没必要多一层抽象）、不引入 log
 5. **Shell completion**：`liaison completion bash|zsh|fish` —— cobra 自带，只是
    需要文档化安装步骤
 
-6. **OCI container image**：`ghcr.io/liaison-cloud/cli:latest`，方便在 CI 里直接
+6. **OCI container image**：`ghcr.io/liaisonio/cli:latest`，方便在 CI 里直接
    `docker run`
 
 ---
