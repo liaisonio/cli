@@ -11,63 +11,90 @@ import (
 
 func newLoginCmd() *cobra.Command {
 	var (
-		token  string
-		server string
+		token     string
+		server    string
+		name      string
+		noBrowser bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Persist an auth token to the config file",
-		Long: `Persist an auth token to ~/.liaison/config.yaml so subsequent commands can
-use it without needing to pass --token or set LIAISON_TOKEN.
+		Short: "Authenticate with liaison.cloud and persist a token locally",
+		Long: `Authenticate with liaison.cloud and store the resulting Personal Access Token
+in ~/.liaison/config.yaml so subsequent commands can use it without flags.
 
-The token is a JWT issued by liaison.cloud. For now the CLI does not support
-the interactive slider-captcha login flow; obtain the token from:
+Three modes:
 
-  1. The web UI → browser dev tools → Application → Local Storage → authorization
-  2. Or an administrator-issued personal access token (future)
+  liaison login                       # default: opens a browser, you approve
+                                      # in the web UI, the CLI receives the
+                                      # PAT via a localhost callback
+
+  liaison login --no-browser          # same flow, but prints the URL instead
+                                      # of auto-opening (useful over SSH)
+
+  liaison login --token liaison_pat_x # skip the browser flow and save an
+                                      # already-obtained PAT directly
 
 Examples:
-  liaison login --token eyJhbGciOi...
-  liaison login --token eyJhbGciOi... --server https://liaison.cloud
+  liaison login
+  liaison login --name agent-prod
+  liaison login --no-browser --server https://staging.liaison.cloud
+  liaison login --token liaison_pat_a1b2c3d4e5f6...
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if token == "" {
-				return fmt.Errorf("--token is required")
-			}
-
 			persisted, err := config.Load(flags.configPath)
 			if err != nil {
 				return err
 			}
+			// Resolve server: explicit flag > existing config > built-in default.
 			if server != "" {
 				persisted.Server = server
 			} else if persisted.Server == "" {
 				persisted.Server = config.DefaultServer
 			}
-			persisted.Token = token
 
-			// Verify the token before persisting — fail fast if it's wrong.
-			c := client.New(persisted.Server, persisted.Token, flags.insecure, flags.verbose)
-			data, err := c.Get("/api/v1/iam/profile_json", nil)
+			// Mode A: explicit --token bypass.
+			if token != "" {
+				return saveAndVerifyToken(cmd, persisted, token)
+			}
+
+			// Mode B: browser flow (default).
+			if name == "" {
+				name = defaultTokenName()
+			}
+			obtained, err := browserLogin(persisted.Server, name, noBrowser, cmd.OutOrStderr())
 			if err != nil {
-				return fmt.Errorf("token verification failed: %w", err)
+				return err
 			}
-			var user client.CurrentUser
-			if err := json.Unmarshal(data, &user); err != nil {
-				return fmt.Errorf("decode user: %w", err)
-			}
-
-			if err := config.Save(flags.configPath, persisted); err != nil {
-				return fmt.Errorf("save config: %w", err)
-			}
-			path, _ := config.DefaultPath()
-			fmt.Fprintf(cmd.OutOrStdout(), "Logged in as %s (id=%d) — credentials saved to %s\n", user.Username, user.ID, path)
-			return nil
+			return saveAndVerifyToken(cmd, persisted, obtained)
 		},
 	}
 
-	cmd.Flags().StringVar(&token, "token", "", "JWT bearer token (required)")
-	cmd.Flags().StringVar(&server, "server", "", "override server URL before saving")
+	cmd.Flags().StringVar(&token, "token", "", "skip the browser flow and save this token directly")
+	cmd.Flags().StringVar(&server, "server", "", "override server URL")
+	cmd.Flags().StringVar(&name, "name", "", "name for the new token (default: cli-<host>-<yyyymmdd>)")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print URL instead of auto-opening (for SSH/headless)")
 	return cmd
+}
+
+// saveAndVerifyToken verifies the token works against the server, then writes
+// it to the config file. Verification first means we never persist a broken
+// token to disk.
+func saveAndVerifyToken(cmd *cobra.Command, cfg *config.Config, tok string) error {
+	cfg.Token = tok
+	c := client.New(cfg.Server, cfg.Token, flags.insecure, flags.verbose)
+	data, err := c.Get("/api/v1/iam/profile_json", nil)
+	if err != nil {
+		return fmt.Errorf("token verification failed: %w", err)
+	}
+	var user client.CurrentUser
+	if err := json.Unmarshal(data, &user); err != nil {
+		return fmt.Errorf("decode user: %w", err)
+	}
+	if err := config.Save(flags.configPath, cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	path, _ := config.DefaultPath()
+	fmt.Fprintf(cmd.OutOrStdout(), "✓ Logged in as %s\n  Credentials saved to %s\n", user.Username, path)
+	return nil
 }

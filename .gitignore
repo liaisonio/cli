@@ -1,7 +1,19 @@
-bin/
+/bin/
+/dist/
 *.exe
 *.test
 *.out
+
+# npm wrapper artifacts
+npm/vendor/
+npm/node_modules/
+npm/SHA256SUMS
+npm/*.tgz
+npm/package-lock.json
+# README is copied in by GH Actions release.yml; never committed.
+npm/README.md
+
+# editor / OS
 .vscode/
 .idea/
 .DS_Store

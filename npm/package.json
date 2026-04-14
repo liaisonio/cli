@@ -1,0 +1,30 @@
+{
+  "name": "@liaison-cloud/cli",
+  "version": "0.1.0",
+  "description": "Liaison Cloud CLI — manage connectors, entries, and applications from the command line",
+  "keywords": ["liaison", "liaison-cloud", "cli", "edge", "tunnel", "agent"],
+  "homepage": "https://liaison.cloud",
+  "license": "Apache-2.0",
+  "author": "Liaison Cloud",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liaison-cloud/cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/liaison-cloud/cli/issues"
+  },
+  "bin": {
+    "liaison": "bin/liaison.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

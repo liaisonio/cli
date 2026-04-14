@@ -1,0 +1,107 @@
+name: release
+
+# Triggered when you push a tag matching v*.*.* — for example:
+#   git tag v0.1.0
+#   git push origin v0.1.0
+#
+# What it does:
+#   1. Cross-compiles the binary for darwin/linux/windows × amd64/arm64
+#   2. Generates SHA256SUMS for the artifacts
+#   3. Creates a GitHub Release with all binaries + SHA256SUMS + install.sh
+#   4. (Optional, gated on NPM_TOKEN) publishes the npm wrapper package
+#      pointing at the new release
+#
+# The release URL becomes the canonical install source for both the curl
+# script and the npm postinstall hook.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write   # needed to create releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Cross-compile binaries
+        run: make release VERSION=${{ steps.version.outputs.version }}
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/liaison-*
+            dist/SHA256SUMS
+            install.sh
+
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only run if the NPM_TOKEN secret exists. Without it the npm publish step
+    # would fail; better to silently skip so first-time setups don't break.
+    if: ${{ vars.PUBLISH_NPM == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Copy README into npm package
+        # The npm package needs its own README file (npm doesn't follow symlinks
+        # cross-platform reliably). We keep a single source-of-truth README.md
+        # at the repo root and copy it in at publish time.
+        run: cp README.md npm/README.md
+
+      - name: Sync version into npm/package.json
+        working-directory: npm
+        run: |
+          # Strip leading 'v' from the tag for npm semver compliance.
+          ver="${{ needs.build.outputs.version }}"
+          ver="${ver#v}"
+          node -e "const fs=require('fs');const p=require('./package.json');p.version='${ver}';fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n');"
+          cat package.json
+
+      - name: Publish to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

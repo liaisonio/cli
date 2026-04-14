@@ -11,16 +11,53 @@ to be **scripted and agent-friendly**.
 
 ## Install
 
+Pick whichever fits your environment. All paths land at the same versioned binary.
+
+### One-line installer (curl, recommended)
+
+```bash
+curl -fsSL https://github.com/liaison-cloud/cli/releases/latest/download/install.sh | sh
+```
+
+Auto-detects OS/arch, verifies SHA256, drops the binary in `~/.local/bin` (or
+`/usr/local/bin` with sudo if `~/.local/bin` is not writable). Pin a version with
+`LIAISON_CLI_VERSION=v0.1.0`.
+
+### npx / npm
+
+```bash
+# Run once without installing
+npx @liaison-cloud/cli edge list
+
+# Or install globally
+npm i -g @liaison-cloud/cli
+liaison edge list
+```
+
+The npm wrapper is a thin Node.js shim that downloads the matching native binary
+from the GitHub release on `postinstall`, verifies its SHA256, and execs it.
+
+### Go install
+
 ```bash
 go install github.com/liaison-cloud/cli/cmd/liaison@latest
 ```
 
-Or build from source:
+Requires Go 1.22+. Best for Go developers who already have `$GOPATH/bin` in their PATH.
+
+### Build from source
 
 ```bash
 git clone https://github.com/liaison-cloud/cli
 cd cli
-make build   # produces ./bin/liaison
+make build           # ./bin/liaison           (current platform)
+make release         # ./dist/liaison-*        (all 5 platforms + SHA256SUMS)
+```
+
+### Verify
+
+```bash
+liaison version
 ```
 
 ## Authenticate
@@ -111,12 +148,37 @@ Error messages go to stderr; output goes to stdout — safe to redirect.
 
 ## Agent guidance
 
-If you are an LLM agent, the simplest way to use this CLI is:
+If you are an LLM agent, here's the minimal path:
 
-1. Set `LIAISON_TOKEN` in your environment once (via the user's secrets store).
-2. Call `liaison <resource> <action> [flags]` — always use the default JSON output and parse it.
-3. Discover capabilities with `liaison <resource> --help` if unsure; every flag is documented with examples.
-4. Never omit `--yes` for `delete` actions — the CLI will refuse to proceed without it.
+**Install** (pick the first one that works in your environment):
+
+```bash
+# Option 1: npx — no install, works in any node-equipped sandbox
+npx -y @liaison-cloud/cli@latest <command>
+
+# Option 2: curl one-liner — works on any unix shell with curl
+curl -fsSL https://github.com/liaison-cloud/cli/releases/latest/download/install.sh | sh
+
+# Option 3: go install — if Go toolchain is already present
+go install github.com/liaison-cloud/cli/cmd/liaison@latest
+```
+
+**Authenticate**:
+
+```bash
+# Best: ask the user to put a Personal Access Token in your secrets store as LIAISON_TOKEN.
+# Then every command works without any login flow:
+LIAISON_TOKEN=liaison_pat_... liaison whoami
+```
+
+**Use**:
+
+1. Always parse stdout as JSON (it's the default output format).
+2. Discover commands with `liaison --help` and `liaison <resource> --help`. Every flag
+   has a description and examples.
+3. Never omit `--yes` for `delete` actions — the CLI refuses to proceed without it.
+4. Don't retry on exit code 1 — read the error message on stderr first.
+5. Errors go to stderr; data goes to stdout. Safe to redirect them separately.
 
 ## License
 
