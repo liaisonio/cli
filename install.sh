@@ -57,6 +57,9 @@ detect_arch() {
 
 resolve_install_dir() {
   if [ -n "${INSTALL_DIR}" ]; then
+    # If the user explicitly chose a path, create it. Trust their decision —
+    # don't fall through to the sudo branch for an arbitrary user-supplied dir.
+    mkdir -p "${INSTALL_DIR}" 2>/dev/null || true
     echo "${INSTALL_DIR}"
     return
   fi
