@@ -3,11 +3,14 @@
 Official command-line interface for [liaison.cloud](https://liaison.cloud), designed
 to be **scripted and agent-friendly**.
 
-- JSON output by default — ready for piping into `jq` or parsing by LLM agents
+- **One-shot bootstrap** — `liaison quickstart` creates a connector + application + public entry in a single call
+- **5 Agent Skills** — drop-in Skill files for AI agents (Claude/Cursor/etc.), installable via `npx skills add liaisonio/cli`
+- JSON output by default — pipe into `jq` or parse from any LLM agent
 - `--output table` for humans, `--output yaml` when you prefer it
 - Credentials from env var (`LIAISON_TOKEN`), config file, or explicit `--token` flag
+- Browser-based PAT login (or `--no-browser` for headless / SSH)
 - Every command has `-h` / `--help` with examples
-- Non-interactive by default: destructive operations require `--yes`
+- Non-interactive by default — destructive operations require `--yes`
 
 ## Install
 
@@ -62,30 +65,88 @@ liaison version
 
 ## Authenticate
 
-The CLI accepts a JWT bearer token issued by liaison.cloud. For now the slider-captcha
-login flow used by the web UI is not supported headlessly — you need to obtain the
-token out of band:
-
-1. Log in to [liaison.cloud](https://liaison.cloud) in your browser.
-2. Open DevTools → Application → Local Storage → copy the `authorization` value.
-3. Persist it:
-
-   ```bash
-   liaison login --token eyJhbGciOi...
-   ```
-
-   This writes `~/.liaison/config.yaml` (mode 0600) and verifies the token against
-   `/api/v1/iam/profile_json`.
-
-Alternatively, skip the config file entirely and pass the token per-invocation:
+The CLI uses long-lived **Personal Access Tokens** (PATs) — `liaison_pat_xxx...`
+issued by the Liaison dashboard. Three ways to provide one:
 
 ```bash
-LIAISON_TOKEN=eyJhbGciOi... liaison edge list
-# or
-liaison --token eyJhbGciOi... edge list
+# 1) Browser flow (recommended for humans)
+liaison login
+# Opens https://liaison.cloud/dashboard/cli-auth in your default browser,
+# you click "Authorize", a fresh PAT is minted and persisted to ~/.liaison/config.yaml.
+
+# 2) SSH / headless / no browser
+liaison login --no-browser
+# Prints the URL — open it on any device that has a browser, click Authorize,
+# the CLI receives the token via a localhost callback.
+
+# 3) Already have a token (CI, agent secrets store)
+LIAISON_TOKEN=liaison_pat_a1b2c3... liaison whoami
+# Or: liaison login --token liaison_pat_a1b2c3...
 ```
 
-Precedence (highest wins): `--token` flag → `LIAISON_TOKEN` env → config file → built-in default.
+Precedence (highest wins): `--token` flag → `LIAISON_TOKEN` env → `~/.liaison/config.yaml` → no token.
+
+Tokens can be revoked any time at **liaison.cloud → Settings → API Tokens**, or by running:
+
+```bash
+liaison logout
+```
+
+## Quick Start
+
+The fastest way to expose a local service:
+
+```bash
+# 1) authenticate once
+liaison login
+
+# 2) bootstrap a connector + register your service + expose it publicly
+liaison quickstart --name mybox \
+  --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
+  --expose --wait-online 2m
+
+# The output JSON includes:
+#   - install_command  → run this on your target host (curl|bash one-liner)
+#   - entry.port       → public TCP port (or entry.domain for http)
+#   - online_achieved  → whether the connector successfully connected
+```
+
+`liaison quickstart` is a single command that:
+
+1. Creates the connector (and returns the install command for the host)
+2. Optionally runs the install script locally (`--install`, requires sudo)
+3. Optionally polls for the connector to come online (`--wait-online <duration>`)
+4. Optionally registers a backend application (`--app-*` flags)
+5. Optionally exposes it via a public entry (`--expose`)
+
+See `liaison quickstart --help` for the full flag list.
+
+## Agent Skills
+
+This CLI ships **5 [Skill files](./skills/)** so AI agents (Claude, Cursor, Continue, etc.)
+know how to use it without a learning curve. Each skill is a self-contained Markdown
+spec with frontmatter — installable with one command:
+
+```bash
+# Install all liaison skills into the agent's skills directory
+npx skills add liaisonio/cli -y -g
+```
+
+| Skill | Purpose |
+|-------|---------|
+| `liaison-shared` | Auth, install, token precedence, error handling, output format (auto-loaded by other skills) |
+| `liaison-quickstart` | One-shot bootstrap: connector + application + entry in a single call |
+| `liaison-connector` | Connector lifecycle: create / list / inspect / enable+disable / delete |
+| `liaison-application` | Backend service metadata: register / list / update / delete |
+| `liaison-entry` | Public exposure: HTTP domains, TCP ports, enable+disable, delete |
+
+After installing the skills, point your agent at `liaison.cloud` and ask it
+things like:
+
+- "Set up a public SSH endpoint for my home server"
+- "List all my connectors and tell me which ones are offline"
+- "Disable connector 100017 — I'm doing maintenance"
+- "Expose the local Postgres on 5432 via Liaison"
 
 ## Usage
 

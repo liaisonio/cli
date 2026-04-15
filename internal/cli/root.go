@@ -85,6 +85,7 @@ Examples:
 		newLoginCmd(),
 		newLogoutCmd(),
 		newWhoamiCmd(),
+		newQuickstartCmd(),
 		newEdgeCmd(),
 		newProxyCmd(),
 		newApplicationCmd(),

@@ -61,7 +61,7 @@ func newDeviceListCmd() *cobra.Command {
 				rows := make([][]string, 0, len(list.Devices))
 				for _, d := range list.Devices {
 					rows = append(rows, []string{
-						strconv.FormatUint(d.ID, 10),
+						strconv.FormatUint(d.ID.Uint64(), 10),
 						d.Name,
 						d.OS,
 						d.Arch,

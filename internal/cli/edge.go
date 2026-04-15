@@ -77,7 +77,7 @@ Filter flags map directly to the underlying API query parameters.
 				rows := make([][]string, 0, len(list.Edges))
 				for _, e := range list.Edges {
 					rows = append(rows, []string{
-						strconv.FormatUint(e.ID, 10),
+						strconv.FormatUint(e.ID.Uint64(), 10),
 						e.Name,
 						edgeStatusLabel(e.Status),
 						edgeOnlineLabel(e.Online),

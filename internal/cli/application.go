@@ -68,12 +68,12 @@ func newAppListCmd() *cobra.Command {
 				rows := make([][]string, 0, len(list.Applications))
 				for _, a := range list.Applications {
 					rows = append(rows, []string{
-						strconv.FormatUint(a.ID, 10),
+						strconv.FormatUint(a.ID.Uint64(), 10),
 						a.Name,
 						a.Protocol,
 						a.IP,
 						strconv.Itoa(a.Port),
-						strconv.FormatUint(a.EdgeID, 10),
+						strconv.FormatUint(a.EdgeID.Uint64(), 10),
 					})
 				}
 				return output.PrintTable(cmd.OutOrStdout(),

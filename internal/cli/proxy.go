@@ -64,7 +64,7 @@ func newProxyListCmd() *cobra.Command {
 				rows := make([][]string, 0, len(list.Proxies))
 				for _, p := range list.Proxies {
 					rows = append(rows, []string{
-						strconv.FormatUint(p.ID, 10),
+						strconv.FormatUint(p.ID.Uint64(), 10),
 						p.Name,
 						p.Protocol,
 						strconv.Itoa(p.Port),
