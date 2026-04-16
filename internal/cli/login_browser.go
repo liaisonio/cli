@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -33,8 +34,17 @@ type browserLoginResult struct {
 //  3. Wait up to 5 minutes for the browser to redirect back with the token
 //  4. Return the plaintext token (caller persists it)
 //
-// noBrowser=true skips the auto-open and prints the URL instead.
+// If the browser can't be opened (headless Linux, SSH, etc.), automatically
+// falls back to manualTokenLogin which doesn't need a callback server — the
+// user creates a token in the dashboard and pastes it at the CLI prompt.
+//
+// noBrowser=true forces the fallback path without even trying to open.
 func browserLogin(server, name string, noBrowser bool, out io.Writer) (string, error) {
+	// --no-browser: skip callback server entirely, go straight to manual flow
+	if noBrowser {
+		return manualTokenLogin(server, out)
+	}
+
 	state, err := randomState()
 	if err != nil {
 		return "", fmt.Errorf("generate state: %w", err)
@@ -84,16 +94,22 @@ func browserLogin(server, name string, noBrowser bool, out io.Writer) (string, e
 
 	authURL := buildAuthURL(server, callback, state, name)
 
-	if noBrowser {
-		fmt.Fprintf(out, "Open this URL in a browser to authorize the CLI:\n\n  %s\n\nWaiting for callback...\n", authURL)
-	} else {
-		fmt.Fprintf(out, "Opening %s in your browser...\n", authURL)
-		if err := openBrowser(authURL); err != nil {
-			fmt.Fprintf(out, "Could not auto-open browser (%v).\nPlease open this URL manually:\n  %s\n\nWaiting for callback...\n", err, authURL)
-		} else {
-			fmt.Fprintln(out, "Waiting for authorization... (Ctrl+C to abort)")
-		}
+	fmt.Fprintf(out, "Opening %s in your browser...\n", authURL)
+	if err := openBrowser(authURL); err != nil {
+		// Browser can't open — shut down the callback server and fall back
+		// to the manual token paste flow. This handles headless Linux, SSH
+		// to a remote server, Docker containers, etc.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+		_ = listener.Close()
+
+		fmt.Fprintf(out, "\nCould not open a browser (%v).\n", err)
+		fmt.Fprintln(out, "Falling back to manual token entry.\n")
+		return manualTokenLogin(server, out)
 	}
+
+	fmt.Fprintln(out, "Waiting for authorization... (Ctrl+C to abort)")
 
 	// Honour Ctrl+C while waiting.
 	sigCh := make(chan os.Signal, 1)
@@ -114,6 +130,35 @@ func browserLogin(server, name string, noBrowser bool, out io.Writer) (string, e
 	case <-ctx.Done():
 		return "", errors.New("authorization timed out after 5 minutes")
 	}
+}
+
+// manualTokenLogin is the no-callback fallback. It directs the user to the
+// dashboard's API Tokens page to create a token, then reads it from stdin.
+//
+// This works in every environment — SSH, headless Docker, screen, tmux — as
+// long as the user has a browser somewhere (phone, another laptop, etc.) and
+// can copy-paste.
+func manualTokenLogin(server string, out io.Writer) (string, error) {
+	tokenURL := strings.TrimRight(server, "/") + "/dashboard/settings"
+
+	fmt.Fprintln(out, "To authenticate, create a Personal Access Token in the Liaison dashboard:")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  1. Open %s\n", tokenURL)
+	fmt.Fprintln(out, "  2. Go to the \"API Tokens\" tab")
+	fmt.Fprintln(out, "  3. Click \"New Token\", give it a name, and copy the token")
+	fmt.Fprintln(out, "  4. Paste it below")
+	fmt.Fprintln(out)
+	fmt.Fprint(out, "Token: ")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return "", errors.New("no input received")
+	}
+	token := strings.TrimSpace(scanner.Text())
+	if token == "" {
+		return "", errors.New("empty token")
+	}
+	return token, nil
 }
 
 // buildAuthURL constructs the cli-auth URL the browser should land on. The
@@ -139,7 +184,7 @@ func randomState() (string, error) {
 }
 
 // openBrowser opens url in the OS default browser. Falls through to error on
-// unsupported platforms; caller is expected to print the URL manually.
+// unsupported platforms; caller is expected to fall back to manual flow.
 func openBrowser(u string) error {
 	switch runtime.GOOS {
 	case "darwin":
@@ -153,8 +198,7 @@ func openBrowser(u string) error {
 }
 
 // writeCallbackHTML writes a minimal "you can close this tab" page back to
-// the browser. We keep it small and dependency-free; no JS, no external
-// resources, so it's safe to render even with strict CSPs.
+// the browser. No JS, no external resources — safe with strict CSPs.
 func writeCallbackHTML(w http.ResponseWriter, success bool, _ string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
