@@ -2,8 +2,8 @@
 //
 // Postinstall hook for @liaisonio/cli.
 //
-// Downloads the platform-specific Go binary from the matching GitHub release
-// and verifies its SHA256 against the published SHA256SUMS file. The binary is
+// Downloads the platform-specific Go binary from liaison.cloud (primary) or
+// GitHub releases (fallback), and verifies its SHA256 against SHA256SUMS. The binary is
 // dropped at vendor/<liaison|liaison.exe> next to this script's parent.
 //
 // Skipped automatically when:
@@ -32,7 +32,21 @@ const { URL } = require('url');
 const pkg = require('../package.json');
 const VERSION = `v${pkg.version}`;
 const REPO = 'liaisonio/cli';
-const RELEASE_BASE = `https://github.com/${REPO}/releases/download/${VERSION}`;
+
+// Download source. By default we try liaison.cloud first (our own CDN), then
+// fall back to GitHub releases. Users can override this by setting
+// LIAISON_CLI_MIRROR to a custom host, e.g.:
+//
+//   LIAISON_CLI_MIRROR=https://my-mirror.example.com/releases npm i -g @liaisonio/cli
+//
+// The mirror URL must serve the same directory layout:
+//   ${MIRROR}/${VERSION}/liaison-v0.2.3-linux-amd64
+//   ${MIRROR}/${VERSION}/SHA256SUMS
+const GITHUB_BASE = `https://github.com/${REPO}/releases/download/${VERSION}`;
+const CHINA_MIRROR = `https://liaison.cloud/releases/${VERSION}`;
+const RELEASE_BASE = process.env.LIAISON_CLI_MIRROR
+  ? `${process.env.LIAISON_CLI_MIRROR.replace(/\/+$/, '')}/${VERSION}`
+  : GITHUB_BASE;
 
 // How long to wait for a single HTTP round-trip before giving up.
 const SOCKET_TIMEOUT_MS = 30_000;
@@ -276,33 +290,56 @@ function sha256(filepath) {
   return hash.digest('hex');
 }
 
-async function main() {
-  const proxy = getProxy();
-  if (proxy) {
-    log(`using proxy ${proxy.protocol}//${proxy.hostname}:${proxy.port || ''}`);
-  }
+// fetchFromBase tries to download the binary + SHA256SUMS from a given base URL.
+// Returns true on success, false on failure (so the caller can try the next mirror).
+async function fetchFromBase(base, label) {
+  const binaryUrl = `${base}/${filename}`;
+  const checksumUrl = `${base}/SHA256SUMS`;
 
-  log(`fetching ${url}`);
-  await downloadToFile(url, destPath);
+  log(`[${label}] fetching ${binaryUrl}`);
+  await downloadToFile(binaryUrl, destPath);
   fs.chmodSync(destPath, 0o755);
 
-  log('verifying SHA256');
-  const sums = await downloadToString(sumsUrl);
+  log(`[${label}] verifying SHA256`);
+  const sums = await downloadToString(checksumUrl);
   const line = sums
     .split('\n')
     .map((l) => l.trim())
     .find((l) => l.endsWith(filename));
   if (!line) {
     fs.unlinkSync(destPath);
-    die(`no SHA256 entry for ${filename} in SHA256SUMS — release may be corrupt`);
+    throw new Error(`no SHA256 entry for ${filename} in SHA256SUMS`);
   }
   const expected = line.split(/\s+/)[0];
   const actual = sha256(destPath);
   if (expected !== actual) {
     fs.unlinkSync(destPath);
-    die(`SHA256 mismatch for ${filename}: expected ${expected}, got ${actual}`);
+    throw new Error(`SHA256 mismatch: expected ${expected}, got ${actual}`);
   }
   log(`installed ${filename} (sha256 ok)`);
+}
+
+async function main() {
+  const proxy = getProxy();
+  if (proxy) {
+    log(`using proxy ${proxy.protocol}//${proxy.hostname}:${proxy.port || ''}`);
+  }
+
+  // If the user set an explicit mirror, use only that.
+  if (process.env.LIAISON_CLI_MIRROR) {
+    await fetchFromBase(RELEASE_BASE, 'mirror');
+    return;
+  }
+
+  // Try our own server first (fast for China and most regions), fall back to
+  // GitHub releases if liaison.cloud is unreachable.
+  try {
+    await fetchFromBase(CHINA_MIRROR, 'liaison.cloud');
+  } catch (err) {
+    warn(`liaison.cloud download failed: ${err.message}`);
+    log('trying GitHub releases...');
+    await fetchFromBase(GITHUB_BASE, 'github');
+  }
 }
 
 // Suppress the unused `http` import warning — kept for future use if we

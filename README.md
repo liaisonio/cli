@@ -4,7 +4,7 @@ Official command-line interface for [liaison.cloud](https://liaison.cloud), desi
 to be **scripted and agent-friendly**.
 
 - **One-shot bootstrap** — `liaison quickstart` creates a connector + application + public entry in a single call
-- **5 Agent Skills** — drop-in Skill files for AI agents (Claude/Cursor/etc.), installable via `npx skills add liaisonio/cli`
+- **5 Agent Skills** — drop-in Skill files for AI agents (Claude/Cursor/etc.)
 - JSON output by default — pipe into `jq` or parse from any LLM agent
 - `--output table` for humans, `--output yaml` when you prefer it
 - Credentials from env var (`LIAISON_TOKEN`), config file, or explicit `--token` flag
@@ -14,41 +14,35 @@ to be **scripted and agent-friendly**.
 
 ## Install
 
-Pick whichever fits your environment. All paths land at the same versioned binary.
-
-### One-line installer (curl, recommended)
-
-```bash
-curl -fsSL https://github.com/liaisonio/cli/releases/latest/download/install.sh | sh
-```
-
-Auto-detects OS/arch, verifies SHA256, drops the binary in `~/.local/bin` (or
-`/usr/local/bin` with sudo if `~/.local/bin` is not writable). Pin a version with
-`LIAISON_CLI_VERSION=v0.1.0`.
-
-### npx / npm
+Install the CLI **and** Agent Skills together — the CLI is the tool, the skills
+teach your AI agent how to use it.
 
 ```bash
-# Run once without installing
-npx @liaisonio/cli edge list
+# 1) Install the CLI (pick one)
+npm i -g @liaisonio/cli                # npm (recommended)
+npx -y @liaisonio/cli@latest whoami    # or run without installing
+curl -fsSL https://liaison.cloud/install-cli.sh | sh   # or curl one-liner
 
-# Or install globally
-npm i -g @liaisonio/cli
-liaison edge list
+# 2) Install Agent Skills (for Claude / Cursor / Continue / etc.)
+npx skills add liaisonio/cli -y -g
 ```
 
-The npm wrapper is a thin Node.js shim that downloads the matching native binary
-from the GitHub release on `postinstall`, verifies its SHA256, and execs it.
+That's it. Your AI agent now has both the binary and the knowledge to drive it.
 
-### Go install
+### Alternative install methods
+
+<details>
+<summary>Go install</summary>
 
 ```bash
 go install github.com/liaisonio/cli/cmd/liaison@latest
 ```
 
 Requires Go 1.22+. Best for Go developers who already have `$GOPATH/bin` in their PATH.
+</details>
 
-### Build from source
+<details>
+<summary>Build from source</summary>
 
 ```bash
 git clone https://github.com/liaisonio/cli
@@ -56,12 +50,35 @@ cd cli
 make build           # ./bin/liaison           (current platform)
 make release         # ./dist/liaison-*        (all 5 platforms + SHA256SUMS)
 ```
+</details>
 
 ### Verify
 
 ```bash
 liaison version
 ```
+
+## Agent Skills
+
+The CLI ships **5 [Skill files](./skills/)** so AI agents know how to use it
+without a learning curve. Each skill is a self-contained Markdown spec with
+frontmatter.
+
+| Skill | Purpose |
+|-------|---------|
+| `liaison-shared` | Auth, install, token precedence, error handling, output format (auto-loaded by other skills) |
+| `liaison-quickstart` | One-shot bootstrap: connector + application + entry in a single call |
+| `liaison-connector` | Connector lifecycle: create / list / inspect / enable+disable / delete |
+| `liaison-application` | Backend service metadata: register / list / update / delete |
+| `liaison-entry` | Public exposure: HTTP domains, TCP ports, enable+disable, delete |
+
+After installing the skills, point your agent at `liaison.cloud` and ask it
+things like:
+
+- "Set up a public SSH endpoint for my home server"
+- "List all my connectors and tell me which ones are offline"
+- "Disable connector 100017 — I'm doing maintenance"
+- "Expose the local Postgres on 5432 via Liaison"
 
 ## Authenticate
 
@@ -84,9 +101,9 @@ LIAISON_TOKEN=liaison_pat_a1b2c3... liaison whoami
 # Or: liaison login --token liaison_pat_a1b2c3...
 ```
 
-Precedence (highest wins): `--token` flag → `LIAISON_TOKEN` env → `~/.liaison/config.yaml` → no token.
+Precedence (highest wins): `--token` flag > `LIAISON_TOKEN` env > `~/.liaison/config.yaml` > no token.
 
-Tokens can be revoked any time at **liaison.cloud → Settings → API Tokens**, or by running:
+Tokens can be revoked any time at **liaison.cloud > Settings > API Tokens**, or by running:
 
 ```bash
 liaison logout
@@ -106,9 +123,9 @@ liaison quickstart --name mybox \
   --expose --wait-online 2m
 
 # The output JSON includes:
-#   - install_command  → run this on your target host (curl|bash one-liner)
-#   - entry.port       → public TCP port (or entry.domain for http)
-#   - online_achieved  → whether the connector successfully connected
+#   - install_command  -> run this on your target host (curl|bash one-liner)
+#   - entry.port       -> public TCP port (or entry.domain for http)
+#   - online_achieved  -> whether the connector successfully connected
 ```
 
 `liaison quickstart` is a single command that:
@@ -120,33 +137,6 @@ liaison quickstart --name mybox \
 5. Optionally exposes it via a public entry (`--expose`)
 
 See `liaison quickstart --help` for the full flag list.
-
-## Agent Skills
-
-This CLI ships **5 [Skill files](./skills/)** so AI agents (Claude, Cursor, Continue, etc.)
-know how to use it without a learning curve. Each skill is a self-contained Markdown
-spec with frontmatter — installable with one command:
-
-```bash
-# Install all liaison skills into the agent's skills directory
-npx skills add liaisonio/cli -y -g
-```
-
-| Skill | Purpose |
-|-------|---------|
-| `liaison-shared` | Auth, install, token precedence, error handling, output format (auto-loaded by other skills) |
-| `liaison-quickstart` | One-shot bootstrap: connector + application + entry in a single call |
-| `liaison-connector` | Connector lifecycle: create / list / inspect / enable+disable / delete |
-| `liaison-application` | Backend service metadata: register / list / update / delete |
-| `liaison-entry` | Public exposure: HTTP domains, TCP ports, enable+disable, delete |
-
-After installing the skills, point your agent at `liaison.cloud` and ask it
-things like:
-
-- "Set up a public SSH endpoint for my home server"
-- "List all my connectors and tell me which ones are offline"
-- "Disable connector 100017 — I'm doing maintenance"
-- "Expose the local Postgres on 5432 via Liaison"
 
 ## Usage
 
@@ -206,40 +196,6 @@ liaison edge get 100017 | jq .name   # pipe into jq
 - `1` — any error (auth, network, API error, invalid args)
 
 Error messages go to stderr; output goes to stdout — safe to redirect.
-
-## Agent guidance
-
-If you are an LLM agent, here's the minimal path:
-
-**Install** (pick the first one that works in your environment):
-
-```bash
-# Option 1: npx — no install, works in any node-equipped sandbox
-npx -y @liaisonio/cli@latest <command>
-
-# Option 2: curl one-liner — works on any unix shell with curl
-curl -fsSL https://github.com/liaisonio/cli/releases/latest/download/install.sh | sh
-
-# Option 3: go install — if Go toolchain is already present
-go install github.com/liaisonio/cli/cmd/liaison@latest
-```
-
-**Authenticate**:
-
-```bash
-# Best: ask the user to put a Personal Access Token in your secrets store as LIAISON_TOKEN.
-# Then every command works without any login flow:
-LIAISON_TOKEN=liaison_pat_... liaison whoami
-```
-
-**Use**:
-
-1. Always parse stdout as JSON (it's the default output format).
-2. Discover commands with `liaison --help` and `liaison <resource> --help`. Every flag
-   has a description and examples.
-3. Never omit `--yes` for `delete` actions — the CLI refuses to proceed without it.
-4. Don't retry on exit code 1 — read the error message on stderr first.
-5. Errors go to stderr; data goes to stdout. Safe to redirect them separately.
 
 ## License
 

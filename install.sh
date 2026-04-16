@@ -16,7 +16,9 @@
 
 set -eu
 
-RELEASE_BASE="${LIAISON_CLI_RELEASE_BASE:-https://github.com/liaisonio/cli/releases}"
+GITHUB_BASE="https://github.com/liaisonio/cli/releases"
+CHINA_MIRROR="https://liaison.cloud/releases"
+RELEASE_BASE="${LIAISON_CLI_RELEASE_BASE:-${GITHUB_BASE}}"
 VERSION="${LIAISON_CLI_VERSION:-latest}"
 INSTALL_DIR="${LIAISON_CLI_INSTALL_DIR:-}"
 BINARY_NAME="liaison"
@@ -136,22 +138,45 @@ main() {
   info "platform: ${os}/${arch}"
 
   artifact="${BINARY_NAME}-${resolved_version}-${os}-${arch}${ext}"
-  artifact_url="${RELEASE_BASE}/download/${resolved_version}/${artifact}"
-  sums_url="${RELEASE_BASE}/download/${resolved_version}/SHA256SUMS"
 
   tmpdir=$(mktemp -d)
   trap 'rm -rf "${tmpdir}"' EXIT
 
-  info "fetching ${artifact_url}"
-  download "${artifact_url}" "${tmpdir}/${artifact}"
+  # Try liaison.cloud first; on failure try GitHub releases.
+  # Users can force a specific source via LIAISON_CLI_RELEASE_BASE.
+  fetch_from() {
+    _base="$1"; _label="$2"
+    _artifact_url="${_base}/download/${resolved_version}/${artifact}"
+    _sums_url="${_base}/download/${resolved_version}/SHA256SUMS"
 
-  info "fetching SHA256SUMS"
-  download "${sums_url}" "${tmpdir}/SHA256SUMS"
+    # China mirror uses a flat layout: /releases/<version>/<file>
+    if echo "${_base}" | grep -q 'liaison.cloud'; then
+      _artifact_url="${_base}/${resolved_version}/${artifact}"
+      _sums_url="${_base}/${resolved_version}/SHA256SUMS"
+    fi
 
-  expected=$(awk -v f="${artifact}" '$2 == f { print $1 }' "${tmpdir}/SHA256SUMS")
-  [ -n "${expected}" ] || err "no SHA256 entry for ${artifact} in SHA256SUMS"
-  info "verifying SHA256"
-  verify_sha256 "${tmpdir}/${artifact}" "${expected}"
+    info "[${_label}] fetching ${_artifact_url}"
+    download "${_artifact_url}" "${tmpdir}/${artifact}" || return 1
+
+    info "[${_label}] fetching SHA256SUMS"
+    download "${_sums_url}" "${tmpdir}/SHA256SUMS" || return 1
+
+    expected=$(awk -v f="${artifact}" '$2 == f { print $1 }' "${tmpdir}/SHA256SUMS")
+    [ -n "${expected}" ] || { info "no SHA256 entry for ${artifact}"; return 1; }
+    info "[${_label}] verifying SHA256"
+    verify_sha256 "${tmpdir}/${artifact}" "${expected}"
+  }
+
+  if [ "${RELEASE_BASE}" != "${GITHUB_BASE}" ]; then
+    # User overrode the source — use only that.
+    fetch_from "${RELEASE_BASE}" "custom" || err "download failed from ${RELEASE_BASE}"
+  else
+    # Try liaison.cloud first (our own CDN), fall back to GitHub releases.
+    fetch_from "${CHINA_MIRROR}" "liaison.cloud" || {
+      info "liaison.cloud download failed, trying GitHub releases..."
+      fetch_from "${GITHUB_BASE}" "github" || err "download failed from both liaison.cloud and GitHub"
+    }
+  fi
 
   install_dir=$(resolve_install_dir)
   info "installing to ${install_dir}/${BINARY_NAME}${ext}"
