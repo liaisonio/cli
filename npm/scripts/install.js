@@ -40,7 +40,7 @@ const REPO = 'liaisonio/cli';
 //   LIAISON_CLI_MIRROR=https://my-mirror.example.com/releases npm i -g @liaisonio/cli
 //
 // The mirror URL must serve the same directory layout:
-//   ${MIRROR}/${VERSION}/liaison-v0.2.4-linux-amd64
+//   ${MIRROR}/${VERSION}/liaison-v0.2.5-linux-amd64
 //   ${MIRROR}/${VERSION}/SHA256SUMS
 const GITHUB_BASE = `https://github.com/${REPO}/releases/download/${VERSION}`;
 const CHINA_MIRROR = `https://liaison.cloud/releases/${VERSION}`;
