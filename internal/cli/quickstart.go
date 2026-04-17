@@ -253,12 +253,10 @@ Output (JSON):
 				shareData, err := r.client.Post(sharePath, nil)
 				if err == nil {
 					var shareResp struct {
-						Data struct {
-							ShareURL string `json:"share_url"`
-						} `json:"data"`
+						ShareURL string `json:"share_url"`
 					}
-					if json.Unmarshal(shareData, &shareResp) == nil && shareResp.Data.ShareURL != "" {
-						qe.ShareURL = shareResp.Data.ShareURL
+					if json.Unmarshal(shareData, &shareResp) == nil && shareResp.ShareURL != "" {
+						qe.ShareURL = shareResp.ShareURL
 					}
 				}
 
