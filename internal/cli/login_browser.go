@@ -190,6 +190,12 @@ func openBrowser(u string) error {
 	case "darwin":
 		return exec.Command("open", u).Start()
 	case "linux":
+		// Headless Linux (SSH, Docker, no desktop) — xdg-open will start
+		// but silently fail; .Start() returns nil so fallback never fires.
+		// Guard by requiring DISPLAY or WAYLAND_DISPLAY to be set.
+		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+			return fmt.Errorf("no display server (headless)")
+		}
 		return exec.Command("xdg-open", u).Start()
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", u).Start()
