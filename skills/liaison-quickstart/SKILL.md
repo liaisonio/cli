@@ -146,6 +146,40 @@ The user's DNS still has to point `myapp.example.com` at Liaison's edge nodes �
 - **Always echo `install_command` to the user** — they need it to actually bring the connector online.
 - **Always echo allocated ports/domains** from `entry.port` / `entry.domain` — these are how the user actually reaches their service.
 
+## Quickstart vs step-by-step
+
+`quickstart` bundles 3 API calls into 1. Use it for greenfield setups. For incremental changes, use the individual commands:
+
+| Goal | Quickstart | Step-by-step |
+|------|-----------|--------------|
+| New connector + app + entry from scratch | `liaison quickstart --name mybox --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http --expose` | `edge create` → `application create` → `proxy create` (3 calls) |
+| New connector only | `liaison quickstart --name mybox` | `liaison edge create --name mybox` |
+| Add app to EXISTING connector | **Don't use quickstart** | `liaison application create --name ssh --protocol ssh --ip 127.0.0.1 --port 22 --edge-id <ID>` |
+| Expose EXISTING app | **Don't use quickstart** | `liaison proxy create --name ssh --protocol ssh --application-id <ID>` |
+
+### Step-by-step example (full flow)
+
+```bash
+# 1. Create connector — note the edge ID from output
+liaison edge create --name my-server
+# => { "access_key": "...", "secret_key": "...", "command": "curl ..." }
+
+# 2. Install connector on the target host (copy the command from step 1)
+# curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... --secret-key=...
+
+# 3. Register backend application (use edge ID from step 1)
+liaison application create \
+  --name my-ssh --protocol ssh \
+  --ip 127.0.0.1 --port 22 \
+  --edge-id 100017
+# => { "id": 100046, ... }
+
+# 4. Expose via public entry (use application ID from step 3)
+liaison proxy create --name my-ssh --protocol ssh --application-id 100046
+# => { "port": 41752, ... }
+# User can now: ssh -p 41752 user@liaison.cloud
+```
+
 ## When NOT to use quickstart
 
 - The user already has a connector and wants to add a second application → use `liaison-application`

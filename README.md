@@ -138,7 +138,79 @@ liaison quickstart --name mybox \
 
 See `liaison quickstart --help` for the full flag list.
 
-## Usage
+## Step-by-Step Guide
+
+If you need more control than `quickstart`, you can create resources one at a time.
+
+### 1. Create a connector
+
+```bash
+liaison edge create --name my-server --description "home lab"
+```
+
+Output includes `access_key`, `secret_key` and an install command. Run the
+install command on the target machine to bring the connector online.
+
+### 2. Register a backend application
+
+Once the connector is online, register the service running behind it:
+
+```bash
+# SSH service
+liaison application create \
+  --name my-ssh --protocol ssh \
+  --ip 127.0.0.1 --port 22 \
+  --edge-id 100017
+
+# HTTP web app
+liaison application create \
+  --name my-web --protocol http \
+  --ip 127.0.0.1 --port 8080 \
+  --edge-id 100017
+```
+
+Supported protocols: `tcp`, `http`, `ssh`, `rdp`, `mysql`, `postgresql`, `redis`, `mongodb`.
+
+### 3. Expose via a public entry
+
+```bash
+# SSH entry — gets an auto-allocated public port
+liaison proxy create --name my-ssh-entry --protocol ssh --application-id 100015
+# => access at: ssh -p <port> user@liaison.cloud
+
+# HTTP entry — gets a subdomain like myapp-username.liaison.cloud
+liaison proxy create --name my-web-entry --protocol http --application-id 100038
+# => access at: https://my-web-entry-username.liaison.cloud
+```
+
+### Putting it all together (equivalent of quickstart)
+
+```bash
+# Step 1: create connector
+liaison edge create --name mybox
+
+# Step 2: run the install command on the target host (from step 1 output)
+# curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... --secret-key=...
+
+# Step 3: register application (use the edge ID from step 1)
+liaison application create \
+  --name web --protocol http \
+  --ip 127.0.0.1 --port 8080 \
+  --edge-id <EDGE_ID>
+
+# Step 4: expose it (use the application ID from step 3)
+liaison proxy create --name web --protocol http --application-id <APP_ID>
+```
+
+Or do it all in one shot:
+
+```bash
+liaison quickstart --name mybox \
+  --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
+  --expose --wait-online 2m
+```
+
+## Command Reference
 
 ```bash
 liaison whoami                                    # who am I logged in as?
