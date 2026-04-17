@@ -139,15 +139,17 @@ func browserLogin(server, name string, noBrowser bool, out io.Writer) (string, e
 // long as the user has a browser somewhere (phone, another laptop, etc.) and
 // can copy-paste.
 func manualTokenLogin(server string, out io.Writer) (string, error) {
-	tokenURL := strings.TrimRight(server, "/") + "/dashboard/settings"
+	name := defaultTokenName()
+	q := url.Values{}
+	q.Set("name", name)
+	q.Set("mode", "manual")
+	tokenURL := strings.TrimRight(server, "/") + "/dashboard/cli-auth?" + q.Encode()
 
-	fmt.Fprintln(out, "To authenticate, create a Personal Access Token in the Liaison dashboard:")
+	fmt.Fprintln(out, "Open this URL in any browser to authorize the CLI:")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  1. Open %s\n", tokenURL)
-	fmt.Fprintln(out, "  2. Go to the \"API Tokens\" tab")
-	fmt.Fprintln(out, "  3. Click \"New Token\", give it a name, and copy the token")
-	fmt.Fprintln(out, "  4. Paste it below")
+	fmt.Fprintf(out, "  %s\n", tokenURL)
 	fmt.Fprintln(out)
+	fmt.Fprintln(out, "After authorizing, copy the token and paste it below.")
 	fmt.Fprint(out, "Token: ")
 
 	scanner := bufio.NewScanner(os.Stdin)
