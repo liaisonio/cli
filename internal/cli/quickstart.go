@@ -375,17 +375,22 @@ func pollEdgeOnline(c *client.Client, edgeID uint64, timeout time.Duration) bool
 }
 
 // runInstallScript shells out to `bash -c <command>` so the curl|bash
-// pipeline returned by the server works as-is. Stdout/stderr are streamed
-// to the caller's stderr so the user sees progress in real time.
+// pipeline returned by the server works as-is. Output is captured silently;
+// only shown to the user if the install fails.
 func runInstallScript(installCommand string, stderr io.Writer) error {
 	cmdline := strings.TrimSpace(installCommand)
 	if cmdline == "" {
 		return fmt.Errorf("empty install command from server")
 	}
-	fmt.Fprintln(stderr, "→ running install script locally (may prompt for sudo)...")
-	fmt.Fprintln(stderr, "  "+cmdline)
+	fmt.Fprintln(stderr, "Installing connector agent...")
 	c := exec.Command("bash", "-c", cmdline)
-	c.Stdout = stderr
-	c.Stderr = stderr
-	return c.Run()
+	var buf strings.Builder
+	c.Stdout = &buf
+	c.Stderr = &buf
+	if err := c.Run(); err != nil {
+		// Install failed — dump the captured output so the user can diagnose
+		fmt.Fprintln(stderr, buf.String())
+		return err
+	}
+	return nil
 }
