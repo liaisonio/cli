@@ -113,15 +113,15 @@ type ProxyList struct {
 // ─── Application ─────────────────────────────────────────────────────────────
 
 type Application struct {
-	ID          FlexUint `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Protocol    string   `json:"protocol,omitempty"`
-	IP          string   `json:"ip,omitempty"`
-	Port        int      `json:"port,omitempty"`
-	EdgeID      FlexUint `json:"edge_id,omitempty"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	UpdatedAt   string   `json:"updated_at,omitempty"`
+	ID              FlexUint `json:"id"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description,omitempty"`
+	ApplicationType string   `json:"application_type,omitempty"`
+	IP              string   `json:"ip,omitempty"`
+	Port            int      `json:"port,omitempty"`
+	EdgeID          FlexUint `json:"edge_id,omitempty"`
+	CreatedAt       string   `json:"created_at,omitempty"`
+	UpdatedAt       string   `json:"updated_at,omitempty"`
 }
 
 type ApplicationList struct {

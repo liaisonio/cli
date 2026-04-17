@@ -70,7 +70,7 @@ func newAppListCmd() *cobra.Command {
 					rows = append(rows, []string{
 						strconv.FormatUint(a.ID.Uint64(), 10),
 						a.Name,
-						a.Protocol,
+						a.ApplicationType,
 						a.IP,
 						strconv.Itoa(a.Port),
 						strconv.FormatUint(a.EdgeID.Uint64(), 10),
@@ -131,12 +131,12 @@ func newAppCreateCmd() *cobra.Command {
 				return err
 			}
 			body := map[string]any{
-				"name":        name,
-				"description": description,
-				"protocol":    protocol,
-				"ip":          ip,
-				"port":        port,
-				"edge_id":     edgeID,
+				"name":             name,
+				"description":     description,
+				"application_type": protocol,
+				"ip":              ip,
+				"port":            port,
+				"edge_id":         edgeID,
 			}
 			data, err := r.client.Post("/api/v1/applications", body)
 			if err != nil {

@@ -49,6 +49,7 @@ type quickstartEntry struct {
 	Protocol string `json:"protocol,omitempty"`
 	Port     int    `json:"port,omitempty"`
 	Domain   string `json:"domain,omitempty"`
+	ShareURL string `json:"share_url,omitempty"`
 }
 
 func newQuickstartCmd() *cobra.Command {
@@ -185,11 +186,11 @@ Output (JSON):
 					appProtocol = "tcp"
 				}
 				appBody := map[string]any{
-					"name":     appName,
-					"protocol": appProtocol,
-					"ip":       appIP,
-					"port":     appPort,
-					"edge_id":  edgeID,
+					"name":             appName,
+					"application_type": appProtocol,
+					"ip":               appIP,
+					"port":             appPort,
+					"edge_id":          edgeID,
 				}
 				appData, err := r.client.Post("/api/v1/applications", appBody)
 				if err != nil {
@@ -202,7 +203,7 @@ Output (JSON):
 				result.Application = &quickstartApplication{
 					ID:       app.ID.Uint64(),
 					Name:     app.Name,
-					Protocol: app.Protocol,
+					Protocol: app.ApplicationType,
 					IP:       app.IP,
 					Port:     app.Port,
 				}
@@ -227,6 +228,10 @@ Output (JSON):
 				if entryDomain != "" {
 					entryBody["domain"] = entryDomain
 				}
+				// HTTP entries require a domain_label; auto-generate from entry name if not provided
+				if appProtocol == "http" && entryDomain == "" {
+					entryBody["domain_label"] = entryName
+				}
 				entryData, err := r.client.Post("/api/v1/proxies", entryBody)
 				if err != nil {
 					return fmt.Errorf("create entry: %w", err)
@@ -235,13 +240,29 @@ Output (JSON):
 				if err := json.Unmarshal(entryData, &entry); err != nil {
 					return fmt.Errorf("decode entry response: %w", err)
 				}
-				result.Entry = &quickstartEntry{
+				qe := &quickstartEntry{
 					ID:       entry.ID.Uint64(),
 					Name:     entry.Name,
 					Protocol: entry.Protocol,
 					Port:     entry.Port,
 					Domain:   entry.Domain,
 				}
+
+				// Fetch a temporary share link for the newly created entry
+				sharePath := fmt.Sprintf("/api/v1/proxies/%d/share_session", entry.ID.Uint64())
+				shareData, err := r.client.Post(sharePath, nil)
+				if err == nil {
+					var shareResp struct {
+						Data struct {
+							ShareURL string `json:"share_url"`
+						} `json:"data"`
+					}
+					if json.Unmarshal(shareData, &shareResp) == nil && shareResp.Data.ShareURL != "" {
+						qe.ShareURL = shareResp.Data.ShareURL
+					}
+				}
+
+				result.Entry = qe
 			}
 
 			return output.Print(cmd.OutOrStdout(), r.fmt, result)
