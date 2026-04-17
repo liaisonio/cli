@@ -111,30 +111,51 @@ liaison logout
 
 ## Quick Start
 
-The fastest way to expose a local service:
+The fastest way to expose a local service — one command does everything:
 
 ```bash
 # 1) authenticate once
 liaison login
 
-# 2) bootstrap a connector + register your service + expose it publicly
+# 2) create connector + install it locally + register app + expose publicly
+#    (needs sudo for the install step)
+liaison quickstart --name mybox \
+  --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
+  --expose --install --wait-online 2m
+```
+
+This single command:
+
+1. Creates a connector on liaison.cloud
+2. Downloads and installs the connector agent on this machine (`--install`, needs sudo)
+3. Waits up to 2 minutes for the connector to come online (`--wait-online 2m`)
+4. Registers a backend application (`--app-*` flags)
+5. Creates a public entry so the service is reachable from the internet (`--expose`)
+
+The output JSON includes everything you need:
+
+```json
+{
+  "connector": { "id": 100042, "name": "mybox", "access_key": "...", "secret_key": "..." },
+  "install_command": "curl ... | bash -s -- ...",
+  "installed": true,
+  "online_achieved": true,
+  "application": { "id": 1, "name": "web", "ip": "127.0.0.1", "port": 8080 },
+  "entry": { "id": 10, "name": "web", "port": 34567, "domain": "web-username.liaison.cloud" }
+}
+```
+
+If you're installing on a **different** machine (not the one running the CLI), omit
+`--install` and run the `install_command` from the output on the target host manually:
+
+```bash
 liaison quickstart --name mybox \
   --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
   --expose --wait-online 2m
 
-# The output JSON includes:
-#   - install_command  -> run this on your target host (curl|bash one-liner)
-#   - entry.port       -> public TCP port (or entry.domain for http)
-#   - online_achieved  -> whether the connector successfully connected
+# Then on the target host:
+# curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... --secret-key=...
 ```
-
-`liaison quickstart` is a single command that:
-
-1. Creates the connector (and returns the install command for the host)
-2. Optionally runs the install script locally (`--install`, requires sudo)
-3. Optionally polls for the connector to come online (`--wait-online <duration>`)
-4. Optionally registers a backend application (`--app-*` flags)
-5. Optionally exposes it via a public entry (`--expose`)
 
 See `liaison quickstart --help` for the full flag list.
 
@@ -148,10 +169,29 @@ If you need more control than `quickstart`, you can create resources one at a ti
 liaison edge create --name my-server --description "home lab"
 ```
 
-Output includes `access_key`, `secret_key` and an install command. Run the
-install command on the target machine to bring the connector online.
+Output includes `access_key`, `secret_key` and a one-line install command:
 
-### 2. Register a backend application
+```json
+{
+  "access_key": "MTc3...",
+  "secret_key": "20S...",
+  "command": "curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... --secret-key=..."
+}
+```
+
+### 2. Install the connector agent
+
+Run the `command` from step 1 on the target machine (needs `curl` + `bash` + `sudo`):
+
+```bash
+curl -k -sSL https://liaison.cloud/install.sh | bash -s -- \
+  --access-key=MTc3... --secret-key=20S... \
+  --server-http-addr=liaison.cloud --server-edge-addr=liaison.cloud:30012
+```
+
+The connector agent will start automatically and connect to liaison.cloud.
+
+### 3. Register a backend application
 
 Once the connector is online, register the service running behind it:
 
@@ -171,7 +211,7 @@ liaison application create \
 
 Supported protocols: `tcp`, `http`, `ssh`, `rdp`, `mysql`, `postgresql`, `redis`, `mongodb`.
 
-### 3. Expose via a public entry
+### 4. Expose via a public entry
 
 ```bash
 # SSH entry — gets an auto-allocated public port
@@ -183,28 +223,15 @@ liaison proxy create --name my-web-entry --protocol http --application-id 100038
 # => access at: https://my-web-entry-username.liaison.cloud
 ```
 
-### Putting it all together (equivalent of quickstart)
+### All-in-one (equivalent of the 4 steps above)
 
 ```bash
-# Step 1: create connector
-liaison edge create --name mybox
+# On the same machine — install + wait + app + expose in one shot
+liaison quickstart --name mybox \
+  --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
+  --expose --install --wait-online 2m
 
-# Step 2: run the install command on the target host (from step 1 output)
-# curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... --secret-key=...
-
-# Step 3: register application (use the edge ID from step 1)
-liaison application create \
-  --name web --protocol http \
-  --ip 127.0.0.1 --port 8080 \
-  --edge-id <EDGE_ID>
-
-# Step 4: expose it (use the application ID from step 3)
-liaison proxy create --name web --protocol http --application-id <APP_ID>
-```
-
-Or do it all in one shot:
-
-```bash
+# On a different machine — omit --install, run install_command manually
 liaison quickstart --name mybox \
   --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
   --expose --wait-online 2m

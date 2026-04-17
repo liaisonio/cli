@@ -32,42 +32,35 @@ The command has five stages, each gated on a flag. Skip whichever you don't need
 
 ## Recipes
 
-### Recipe A — just create the connector
+### Recipe A — full closed-loop on the same machine (RECOMMENDED)
 
-User intent: "Create a new connector called mybox." You then hand the install command to the user to run on their host.
-
-```bash
-liaison quickstart --name mybox
-```
-
-Result you get back:
-```json
-{
-  "connector": { "id": 100042, "name": "mybox", "access_key": "...", "secret_key": "..." },
-  "install_command": "curl -k -sSL https://liaison.cloud/install.sh | bash -s -- --access-key=... ...",
-  "installed": false,
-  "online_waited": false,
-  "online_achieved": false,
-  "next_steps": [ "Run install_command on the target host (needs curl + bash + sudo)." ]
-}
-```
-
-**Your job afterwards**: paste `install_command` to the user with the instruction "run this on the machine you want to make a connector".
-
-### Recipe B — connector + application, no public exposure yet
-
-The user wants to register a service but is not ready to publish it.
+The user is on the machine that will run the connector. One command does everything — create connector, install it, wait for online, register app, expose publicly:
 
 ```bash
 liaison quickstart --name mybox \
-  --app-name ssh --app-ip 127.0.0.1 --app-port 22 --app-protocol ssh
+  --app-name ssh --app-ip 127.0.0.1 --app-port 22 --app-protocol ssh \
+  --expose --install --wait-online 2m
 ```
 
-The application is created on the server. Until the user runs the install command on their host, the application metadata exists but has no live connector to forward traffic.
+**`--install` downloads and installs the connector agent on the current machine (needs sudo).** Combined with `--wait-online`, this is a fully closed loop — the command doesn't return until the connector is online and the entry is created.
 
-### Recipe C — full bootstrap with public exposure
+Result:
+```json
+{
+  "connector": { "id": 100042, "name": "mybox", "access_key": "...", "secret_key": "..." },
+  "install_command": "curl ...",
+  "installed": true,
+  "online_achieved": true,
+  "application": { "id": 1, "name": "ssh", "protocol": "ssh", "ip": "127.0.0.1", "port": 22 },
+  "entry": { "id": 10, "name": "ssh", "port": 34567 }
+}
+```
 
-The user wants to go from zero to "I can SSH from anywhere" / "my web app has a public URL".
+Tell the user: `ssh -p 34567 user@liaison.cloud` — it works immediately.
+
+### Recipe B — CLI on a different machine than the connector
+
+The user's CLI is on their laptop, but the connector should run on a remote server. Omit `--install` — the user must run the install command on the target host manually.
 
 ```bash
 liaison quickstart --name mybox \
@@ -77,26 +70,38 @@ liaison quickstart --name mybox \
 
 The flow:
 1. Create connector → return ak/sk + install command
-2. Print "next step: run this command on your host" + WAIT for them to run it
+2. **You echo `install_command` to the user** — they run it on the target host
 3. Poll for up to 2 minutes until the connector is online
-4. Once online, create the application
-5. Create the entry pointing at the application
-6. Return the entry's allocated port/domain in the result so you can tell the user "ssh -p <port> user@liaison.cloud"
+4. Once online, create the application + entry
+5. Return the entry's allocated port/domain
 
-If the user is on the same machine as the CLI, you can collapse steps 2 + 3 by adding `--install`:
+### Recipe C — just create the connector
+
+User intent: "Create a new connector called mybox." They'll install and configure later.
 
 ```bash
-liaison quickstart --name mybox --install \
-  --app-name ssh --app-ip 127.0.0.1 --app-port 22 --app-protocol ssh \
-  --expose --wait-online 2m
+liaison quickstart --name mybox
 ```
 
-### Recipe D — HTTP web app with a custom domain
+**Your job afterwards**: echo `install_command` to the user with the instruction "run this on the machine you want to make a connector".
+
+### Recipe D — connector + app, no public exposure yet
+
+The user wants to register a service but isn't ready to publish it.
 
 ```bash
-liaison quickstart --name mybox \
+liaison quickstart --name mybox --install --wait-online 2m \
+  --app-name ssh --app-ip 127.0.0.1 --app-port 22 --app-protocol ssh
+```
+
+The connector is installed and the application is registered, but no public entry is created. The user can add an entry later with `liaison proxy create`.
+
+### Recipe E — HTTP web app with a custom domain
+
+```bash
+liaison quickstart --name mybox --install --wait-online 2m \
   --app-name web --app-ip 127.0.0.1 --app-port 8080 --app-protocol http \
-  --expose --entry-domain myapp.example.com --wait-online 2m
+  --expose --entry-domain myapp.example.com
 ```
 
 The user's DNS still has to point `myapp.example.com` at Liaison's edge nodes — quickstart does not configure DNS.
