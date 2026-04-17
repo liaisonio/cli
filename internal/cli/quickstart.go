@@ -44,12 +44,13 @@ type quickstartApplication struct {
 }
 
 type quickstartEntry struct {
-	ID       uint64 `json:"id"`
-	Name     string `json:"name"`
-	Protocol string `json:"protocol,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Domain   string `json:"domain,omitempty"`
-	ShareURL string `json:"share_url,omitempty"`
+	ID        uint64 `json:"id"`
+	Name      string `json:"name"`
+	Protocol  string `json:"protocol,omitempty"`
+	Port      int    `json:"port,omitempty"`
+	Domain    string `json:"domain,omitempty"`
+	AccessURL string `json:"access_url,omitempty"`
+	ShareURL  string `json:"share_url,omitempty"`
 }
 
 func newQuickstartCmd() *cobra.Command {
@@ -253,17 +254,63 @@ Output (JSON):
 				shareData, err := r.client.Post(sharePath, nil)
 				if err == nil {
 					var shareResp struct {
-						ShareURL string `json:"share_url"`
+						ShareURL  string `json:"share_url"`
+						AccessURL string `json:"access_url"`
 					}
-					if json.Unmarshal(shareData, &shareResp) == nil && shareResp.ShareURL != "" {
-						qe.ShareURL = shareResp.ShareURL
+					if json.Unmarshal(shareData, &shareResp) == nil {
+						if shareResp.ShareURL != "" {
+							qe.ShareURL = shareResp.ShareURL
+						}
+						if shareResp.AccessURL != "" {
+							qe.AccessURL = shareResp.AccessURL
+						}
 					}
+				}
+				// Fallback: build access_url from domain if share API didn't return it
+				if qe.AccessURL == "" && qe.Domain != "" {
+					qe.AccessURL = "https://" + qe.Domain
 				}
 
 				result.Entry = qe
 			}
 
-			return output.Print(cmd.OutOrStdout(), r.fmt, result)
+			// If user explicitly requested a format (-o json/yaml), output full
+			// structured data for agents. Otherwise show a human-friendly summary.
+			if cmd.Flags().Changed("output") {
+				return output.Print(cmd.OutOrStdout(), r.fmt, result)
+			}
+
+			// Human-friendly default output
+			w := cmd.OutOrStdout()
+			fmt.Fprintf(w, "✓ Connector %q created\n", result.Connector.Name)
+			if result.Installed {
+				fmt.Fprintln(w, "✓ Connector agent installed locally")
+			}
+			if result.OnlineAchieved {
+				fmt.Fprintln(w, "✓ Connector is online")
+			}
+			if result.Application != nil {
+				fmt.Fprintf(w, "✓ Application %q registered (%s %s:%d)\n",
+					result.Application.Name, result.Application.Protocol,
+					result.Application.IP, result.Application.Port)
+			}
+			if result.Entry != nil {
+				fmt.Fprintln(w)
+				if result.Entry.AccessURL != "" {
+					fmt.Fprintf(w, "  Access URL:  %s\n", result.Entry.AccessURL)
+				} else if result.Entry.Port > 0 && result.Entry.Port != 443 {
+					fmt.Fprintf(w, "  Access:      liaison.cloud:%d\n", result.Entry.Port)
+				}
+				if result.Entry.ShareURL != "" {
+					fmt.Fprintf(w, "  Share URL:   %s\n", result.Entry.ShareURL)
+				}
+				fmt.Fprintln(w)
+			}
+			if !result.Installed && result.InstallCommand != "" {
+				fmt.Fprintln(w, "Next: run this on the target host to bring the connector online:")
+				fmt.Fprintf(w, "  %s\n", result.InstallCommand)
+			}
+			return nil
 		},
 	}
 
