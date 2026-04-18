@@ -25,7 +25,7 @@ The command has five stages, each gated on a flag. Skip whichever you don't need
 | Stage | Required flag | Purpose |
 |-------|--------------|---------|
 | 1. Create connector | always runs | Create an edge record on the server, return ak/sk + install command |
-| 2. Run install script locally | `--install` | Shell out to `bash -c` and execute the install one-liner on the **local** machine. Only safe when the CLI is on the same host that should be a connector. Needs sudo. |
+| 2. Run install script locally | `--install` | Shell out to `bash -c` and execute `install.sh` on the **local** machine. This installs the binary, writes the config, **and registers a launchd (macOS) / systemd (Linux) service** so the connector survives reboots. Only safe when the CLI is on the same host that should be a connector. **macOS**: user-domain install, no sudo needed — safe to run non-interactively from an agent. **Linux**: writes to `/usr/local/bin` and `/etc/systemd`, still needs sudo — if no tty is available, the sudo prompt fails silently and the install returns an error. |
 | 3. Wait for online | `--wait-online <duration>` | Poll the edge until `online == 1` or timeout. Required if the next stages need a working tunnel. |
 | 4. Register application | `--app-name` + `--app-ip` + `--app-port` (+ optional `--app-protocol`) | Create the backend application metadata |
 | 5. Expose via entry | `--expose` (+ optional `--entry-name`/`--entry-port`/`--entry-domain`) | Create a public entry pointing at the application |
@@ -150,6 +150,9 @@ The user's DNS still has to point `myapp.example.com` at Liaison's edge nodes �
 - **Do not call quickstart twice for the same logical setup.** Each call creates a NEW connector (and new ak/sk). If a previous call created a connector but the user closed the tab, find it with `liaison edge list` instead.
 - **Always echo `install_command` to the user** — they need it to actually bring the connector online.
 - **Always echo allocated ports/domains** from `entry.port` / `entry.domain` — these are how the user actually reaches their service.
+- **Never bypass `install.sh` by starting `liaison-edge` directly.** If `online_achieved == false` and you're tempted to "just start the agent manually", DO NOT. A raw `liaison-edge &` works for one session but registers no launchd/systemd unit, so the connector silently goes offline after reboot or logout. Re-run `install.sh` with the ak/sk (or `liaison quickstart --install` for a fresh one) instead. See the `liaison-connector` skill's "Recovering an offline connector" section for the full diagnostic flow.
+- **ak/sk are a one-shot secret.** The server only returns `access_key` / `secret_key` from `edge create` (including inside `quickstart`) — they cannot be retrieved later. If the user loses them and the connector host's service is gone, the only recovery is `edge delete` (which cascades to apps + entries) followed by a fresh `quickstart`.
+- **Handling sudo on Linux `--install`.** `install.sh` on Linux writes to `/usr/local/bin` and `/etc/systemd/system`, which need root. When the CLI runs under an agent (no tty), `sudo` cannot prompt and the install errors out with `a terminal is required`. Probe first — `sudo -n true 2>/dev/null`. If that succeeds you have passwordless sudo and `--install` will work; otherwise skip `--install`, echo `install_command` to the user, and tell them to run it themselves (in Claude Code, prefix with `!` so the command runs in the user's shell and sudo can prompt). **macOS is not affected** — the install is fully user-domain and needs no sudo.
 
 ## Quickstart vs step-by-step
 

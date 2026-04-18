@@ -137,9 +137,89 @@ Cascades: deletes the connector, its applications, its entries, and its pending 
 | "Delete connector X" | confirm → `liaison edge delete <id> --yes` |
 | "Rename connector X to Y" | `liaison edge update <id> --name Y` |
 
+## The connector agent lifecycle (READ THIS before touching a host)
+
+The connector is a long-running daemon (`liaison-edge`) that **must** run under a supervisor — `launchd` on macOS, `systemd` on Linux — so it auto-starts on boot and restarts on crash.
+
+The official `install.sh` (at `https://liaison.cloud/install.sh`, invoked by `install_command` from `edge create` or by `liaison quickstart --install`) does three things, and all three are required for a healthy connector:
+
+1. Downloads and installs the `liaison-edge` binary
+   - **macOS**: `~/Library/Application Support/liaison/bin/liaison-edge` (user-owned, **no sudo**)
+   - **Linux**: `/usr/local/bin/liaison-edge` (system, needs sudo)
+2. Writes a config containing the ak/sk and server endpoints
+   - **macOS**: `~/Library/Application Support/liaison/liaison-edge.yaml` (no sudo)
+   - **Linux**: `/etc/liaison/liaison-edge.yaml` (sudo)
+3. **Registers a supervised service**
+   - **macOS**: `~/Library/LaunchAgents/com.liaison.edge.plist` (user launchd, no sudo)
+   - **Linux**: `/etc/systemd/system/liaison-edge.service` (system systemd, sudo)
+
+On **macOS** the install is fully user-domain — no sudo required — so `liaison quickstart --install` can run non-interactively from an agent. On **Linux** the install still needs root because systemd/system-wide paths are involved; in a non-interactive context (no tty for sudo to prompt), prefer emitting `install_command` for the user to run themselves.
+
+> **Legacy macOS installs**: older versions of `install.sh` placed the binary at `/usr/local/bin/liaison-edge`. Re-running the new installer leaves the stale file in place and prints a warning; the current `uninstall.sh` cleans both locations (the legacy one still requires sudo).
+
+### NEVER start `liaison-edge` manually
+
+Do NOT do any of the following, even if the connector looks offline and "just running the binary" seems like a quick fix:
+
+```bash
+# ❌ All of these are broken in different ways
+~/Library/Application\ Support/liaison/bin/liaison-edge -c ~/Library/Application\ Support/liaison/liaison-edge.yaml &
+nohup liaison-edge -c /etc/liaison/liaison-edge.yaml >/tmp/edge.log 2>&1 &
+sudo liaison-edge &
+```
+
+Why it bites later:
+- **Dies on logout / reboot.** No supervisor → connector goes offline on the next restart and the user won't know why.
+- **Fights the supervisor.** If the launchd/systemd unit is also present, two instances race for the same tunnel and the cloud bounces them.
+- **No log rotation, no crash loop detection.** You'll miss failures.
+
+Every offline-connector recovery path ends with `install.sh` or `systemctl restart` / `launchctl kickstart` — never a raw binary exec.
+
+## Recovering an offline connector
+
+When `liaison edge get <id>` returns `online: 2` (offline):
+
+**Step 1 — confirm which side is broken.**
+
+On the connector host, check the supervisor:
+
+```bash
+# macOS
+launchctl print gui/$(id -u)/com.liaison.edge 2>&1 | head -20
+# look for:  state = running   PID = <n>   LastExitStatus = 0
+
+# Linux
+systemctl status liaison-edge
+```
+
+**Step 2 — decide based on what you see.**
+
+| What you observe | Meaning | Fix |
+|---|---|---|
+| Service is running + heartbeats in log (`liaison-edge.log`) but cloud says offline | Transient reconnect | Wait ~30s, or kick: `liaison edge update <id> --status stopped` then `--status running` |
+| Service is loaded but exited / crashlooping | Daemon itself is sick | Read logs: macOS `~/Library/Logs/liaison/liaison-edge.log`, Linux `journalctl -u liaison-edge -n 100`. Then `launchctl kickstart -k gui/$(id -u)/com.liaison.edge` or `sudo systemctl restart liaison-edge` |
+| Service does **not exist** at all (no plist / no unit file) | Agent was never installed on this host, or was uninstalled | **Re-run the installer** (see Step 3) — do NOT start the binary by hand |
+| Service exists but config file missing / corrupted | Partial uninstall | Re-run the installer with the original ak/sk |
+
+**Step 3 — reinstalling on a host where the service is gone.**
+
+The `access_key` / `secret_key` are **only returned at `edge create` time** — the API will not re-emit them. So:
+
+- **If the user still has the original `install_command`** (stashed in 1Password, shell history, etc.), have them re-run it on the target host. That's the cleanest recovery.
+- **If the install command is lost**, the only path is to scrap and recreate:
+
+  ```bash
+  liaison edge delete <id> --yes       # cascades to apps + entries
+  liaison quickstart --name <name> ... --install --wait-online 2m
+  # ... then liaison application create + liaison proxy create for each service
+  ```
+
+  Warn the user first: cascade-delete wipes every application and entry that pointed at this connector. They'll need to recreate those too.
+
 ## What NOT to do
 
 - **Do not invent ids.** Always list or accept an id from the user. IDs are big integers (~100000+) — guessing is not safe.
 - **Do not execute the `install_command`** on your own machine. It installs a connector agent bound to a specific network identity; running it locally could register your CLI host as a connector you didn't intend.
 - **Do not bulk-delete** without explicit per-id confirmation. Ask "delete connectors A, B, C?" and wait for an explicit yes.
 - **Do not chain create + install + app + entry manually** — use the `liaison-quickstart` skill instead, which does all of it in one call and polls for online state.
+- **Do not `liaison-edge &` to "fix" an offline connector.** See *The connector agent lifecycle* above. If the supervised service is broken, re-run the installer; if the binary is fine but needs a kick, use `launchctl kickstart` / `systemctl restart`.
