@@ -38,6 +38,18 @@ npx -y @liaisonio/cli@latest version
 go install github.com/liaisonio/cli/cmd/liaison@latest
 ```
 
+The agent skill files themselves are installed via:
+
+```bash
+npx skills add liaisonio/cli -y -g
+```
+
+Both `npm i -g @liaisonio/cli` and the curl installer also pre-populate
+`~/.claude/skills` as a safety net, so on a fresh CLI install the skill
+files are usually already there. If `npx skills add` can't reach GitHub,
+`liaison skills install -g` reads the embedded copy out of the CLI binary —
+fully offline fallback.
+
 ## Authentication — Personal Access Tokens
 
 The CLI authenticates with a **Personal Access Token (PAT)** — a long-lived bearer token the user creates in the Liaison dashboard. Tokens look like `liaison_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.

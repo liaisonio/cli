@@ -19,15 +19,40 @@ teach your AI agent how to use it.
 
 ```bash
 # 1) Install the CLI (pick one)
-npm i -g @liaisonio/cli                # npm (recommended)
-npx -y @liaisonio/cli@latest whoami    # or run without installing
-curl -fsSL https://liaison.cloud/install-cli.sh | sh   # or curl one-liner
+npm i -g @liaisonio/cli                               # npm (recommended)
+npx -y @liaisonio/cli@latest whoami                   # or run without installing
+curl -fsSL https://liaison.cloud/install-cli.sh | sh  # or curl one-liner
 
 # 2) Install Agent Skills (for Claude / Cursor / Continue / etc.)
 npx skills add liaisonio/cli -y -g
 ```
 
 That's it. Your AI agent now has both the binary and the knowledge to drive it.
+
+> `npm i -g @liaisonio/cli` and the curl installer also drop the bundled skill
+> files at `~/.claude/skills` automatically as a safety net — set
+> `LIAISON_CLI_SKIP_SKILLS=1` to opt out.
+
+### If `npx skills add` can't reach GitHub
+
+On networks that can't clone GitHub (e.g. some CN environments), `npx skills
+add` may time out. The skill files are embedded in the CLI binary, so you can
+install them offline instead — and across every AI agent detected on the
+machine (Claude Code, Codex, Cursor, Pi, Trae, OpenClaw), same coverage as
+`npx skills add liaisonio/cli -a '*'`:
+
+```bash
+liaison skills agents                  # which agents are detected here
+liaison skills install                 # fan out to every detected agent
+liaison skills install --agent claude  # just Claude Code
+liaison skills install -p              # ./.claude/skills (per-repo)
+liaison skills install --force         # overwrite existing copies
+liaison skills uninstall               # remove liaison-* from every agent
+```
+
+No network needed — the `SKILL.md` files are read straight out of the
+`liaison` binary you just installed. `liaison skills uninstall` also fills a
+gap where `npx skills remove` doesn't touch agents like Pi.
 
 ### Alternative install methods
 

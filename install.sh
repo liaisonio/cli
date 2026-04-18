@@ -188,6 +188,16 @@ main() {
     mv "${tmpdir}/${artifact}" "${install_dir}/${BINARY_NAME}${ext}"
   fi
 
+  # Install the bundled agent skill files into ~/.claude/skills. Best-effort:
+  # failure just prints a hint, it doesn't fail the install. Opt out with
+  # LIAISON_CLI_SKIP_SKILLS=1.
+  if [ "${LIAISON_CLI_SKIP_SKILLS:-0}" != "1" ]; then
+    info "installing agent skills to ~/.claude/skills"
+    if ! "${install_dir}/${BINARY_NAME}${ext}" skills install -g >/dev/null 2>&1; then
+      info "skill install failed — run \`${BINARY_NAME} skills install -g\` manually to retry"
+    fi
+  fi
+
   echo
   echo "✓ Liaison CLI installed: ${install_dir}/${BINARY_NAME}${ext}"
   case ":${PATH}:" in

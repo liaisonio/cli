@@ -27,6 +27,7 @@ const tls = require('tls');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 const { URL } = require('url');
 
 const pkg = require('../package.json');
@@ -319,6 +320,37 @@ async function fetchFromBase(base, label) {
   log(`installed ${filename} (sha256 ok)`);
 }
 
+// installSkills invokes `liaison skills install -g` with the just-downloaded
+// binary so the agent SKILL.md files land at ~/.claude/skills. This is a
+// best-effort step — if it fails (no $HOME, permission denied, whatever) we
+// warn and move on; the user can re-run it manually with
+// `liaison skills install -g`. Opt out entirely with
+// LIAISON_CLI_SKIP_SKILLS=1.
+function installSkills() {
+  if (process.env.LIAISON_CLI_SKIP_SKILLS === '1') {
+    log('LIAISON_CLI_SKIP_SKILLS=1, skipping agent skill install');
+    return;
+  }
+  try {
+    const res = spawnSync(destPath, ['skills', 'install', '-g'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 15_000,
+    });
+    if (res.error || res.status !== 0) {
+      const msg = res.error ? res.error.message : `exit ${res.status}`;
+      warn(
+        `agent skill install failed (${msg}) — re-run \`liaison skills install -g\` to retry`,
+      );
+      return;
+    }
+    // Strip the trailing newline from the CLI's own output and prefix with our tag.
+    const out = (res.stdout || '').toString().trim();
+    if (out) log(out.split('\n').join('\n  '));
+  } catch (err) {
+    warn(`agent skill install errored (${err.message}) — re-run manually`);
+  }
+}
+
 async function main() {
   const proxy = getProxy();
   if (proxy) {
@@ -328,18 +360,20 @@ async function main() {
   // If the user set an explicit mirror, use only that.
   if (process.env.LIAISON_CLI_MIRROR) {
     await fetchFromBase(RELEASE_BASE, 'mirror');
-    return;
+  } else {
+    // Try our own server first (fast for China and most regions), fall back to
+    // GitHub releases if liaison.cloud is unreachable.
+    try {
+      await fetchFromBase(CHINA_MIRROR, 'liaison.cloud');
+    } catch (err) {
+      warn(`liaison.cloud download failed: ${err.message}`);
+      log('trying GitHub releases...');
+      await fetchFromBase(GITHUB_BASE, 'github');
+    }
   }
 
-  // Try our own server first (fast for China and most regions), fall back to
-  // GitHub releases if liaison.cloud is unreachable.
-  try {
-    await fetchFromBase(CHINA_MIRROR, 'liaison.cloud');
-  } catch (err) {
-    warn(`liaison.cloud download failed: ${err.message}`);
-    log('trying GitHub releases...');
-    await fetchFromBase(GITHUB_BASE, 'github');
-  }
+  // Now that the binary is in place, drop the agent skill files alongside it.
+  installSkills();
 }
 
 // Suppress the unused `http` import warning — kept for future use if we

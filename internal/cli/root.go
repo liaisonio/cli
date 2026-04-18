@@ -90,6 +90,7 @@ Examples:
 		newProxyCmd(),
 		newApplicationCmd(),
 		newDeviceCmd(),
+		newSkillsCmd(),
 		newVersionCmd(),
 	)
 	return root
