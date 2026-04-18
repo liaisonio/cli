@@ -229,8 +229,9 @@ Output (JSON):
 				if entryDomain != "" {
 					entryBody["domain"] = entryDomain
 				}
-				// HTTP entries require a domain_label; auto-generate from entry name if not provided
-				if appProtocol == "http" && entryDomain == "" {
+				// HTTP entries always require a domain_label; derive from
+				// --entry-name. Any custom --entry-domain is layered on top.
+				if appProtocol == "http" {
 					entryBody["domain_label"] = entryName
 				}
 				entryData, err := r.client.Post("/api/v1/proxies", entryBody)

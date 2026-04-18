@@ -26,7 +26,7 @@ Entries come in two flavours, decided by the application's `protocol`:
 
 | Protocol | Public exposure | Configured via |
 |----------|-----------------|----------------|
-| `http` | Public HTTPS URL like `https://myapp.example.com` | `--domain` |
+| `http` | Public HTTPS URL like `https://<label>-<user>.liaison.cloud` | `--domain-label` (auto-derived from `--name` if omitted) |
 | `tcp` / `ssh` / `mysql` / `postgresql` / `redis` / `mongodb` / `rdp` | Public TCP port like `liaison.cloud:34567` | `--port` (or omit for auto-allocate) |
 
 An entry has its own `status`:
@@ -77,11 +77,17 @@ liaison proxy get 10
 `--name` and `--application-id` are required. Other flags depend on the protocol:
 
 ```bash
-# HTTP entry → expose via a public domain
+# HTTP entry → default label from --name (result: my-web-<user>.liaison.cloud)
 liaison proxy create \
   --name my-web \
   --protocol http \
-  --domain myapp.example.com \
+  --application-id 5
+
+# HTTP entry → pick an explicit subdomain label
+liaison proxy create \
+  --name my-web \
+  --protocol http \
+  --domain-label marketing-site \
   --application-id 5
 
 # TCP-style entry → expose on a server-allocated public port
@@ -102,12 +108,16 @@ liaison proxy create \
 **Picking `--port`:**
 - Leave it `0` (the default) for `tcp`-like protocols → server auto-allocates an available port
 - Set a specific port only when the user asks for one (e.g. they have a firewall rule pinned to a port)
-- For `http`, leave port 0 and use `--domain` instead
+- For `http`, `--port` is ignored — use `--domain-label` instead
 
-**Picking `--domain`:**
-- Required for `http` protocol; ignored for everything else
-- Must be a domain the user controls and has DNS pointing at Liaison's edge nodes
-- Subdomain example: `myapp.example.com`
+**Picking `--domain-label`:**
+- Required server-side for `http` protocol. The CLI auto-derives it from `--name` when omitted, so most calls don't need it.
+- It's the **short subdomain label** (e.g. `myapp`) — the server composes the full hostname as `<label>-<user>.liaison.cloud`.
+- Passing a full FQDN here will be rejected; use `--domain` for a custom FQDN on top of the label.
+
+**Picking `--domain` (optional BYO domain):**
+- Only when the user owns a custom domain with DNS pointing at liaison.cloud's edge nodes.
+- Without DNS the entry exists in the DB but no traffic reaches it.
 
 ### Update
 
@@ -136,7 +146,7 @@ The associated application is left alone; only the public exposure is removed.
 
 | User says | Command |
 |-----------|---------|
-| "Expose my web app at example.com" | First find the application id with `liaison application list`, then `liaison proxy create --name web --protocol http --domain example.com --application-id <id>` |
+| "Expose my web app" | First find the application id with `liaison application list`, then `liaison proxy create --name web --protocol http --application-id <id>` (label defaults to `web`). For a custom label: add `--domain-label marketing`. For a BYO domain with DNS already pointed: add `--domain example.com`. |
 | "Open SSH access to my home server" | `liaison proxy create --name ssh --protocol ssh --application-id <id>` (port auto-allocated) |
 | "What's my SSH port?" | `liaison proxy list -o table` then read the `PORT` column for the ssh entry |
 | "Take entry 10 offline temporarily" | `liaison proxy update 10 --status stopped` |
@@ -146,7 +156,9 @@ The associated application is left alone; only the public exposure is removed.
 ## Common mistakes to avoid
 
 - **Creating an entry without an application first.** Applications and entries are separate resources. If `liaison application list --edge-id <connector>` returns nothing, you need to `liaison application create ...` BEFORE creating the entry.
-- **Setting both `--port` and `--domain`** on the same entry. Pick one based on protocol — http uses domain, everything else uses port.
+- **Setting `--port` for an `http` entry.** HTTP routes by hostname (label+domain), not port; `--port` is silently ignored. Use `--domain-label` instead.
+- **Passing a full FQDN to `--domain-label`.** That field is the short label (e.g. `myapp`), not a hostname. Putting `myapp.liaison.cloud` here will be rejected. Use `--domain` for FQDNs.
+- **Omitting the domain label entirely on http.** The server returns `DOMAIN_LABEL_REQUIRED (400)`. The CLI now auto-derives from `--name`, but if you override body manually make sure `domain_label` is set.
 - **Confusing entry status with connector status.** They're independent. Stopping an entry takes ONE service offline; stopping a connector takes ALL services on that host offline.
 - **Reusing `--port`.** Two entries can't bind the same public port. The server returns a clear error if you try.
 - **Sharing the `--domain`** of a domain you don't actually control. The DNS still has to point at Liaison's edge nodes — otherwise the entry exists in the database but no real traffic ever reaches it.

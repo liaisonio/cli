@@ -115,6 +115,7 @@ func newProxyCreateCmd() *cobra.Command {
 		protocol      string
 		port          int
 		domain        string
+		domainLabel   string
 		applicationID uint64
 	)
 	cmd := &cobra.Command{
@@ -122,8 +123,23 @@ func newProxyCreateCmd() *cobra.Command {
 		Short: "Create a new entry",
 		Long: `Create a new entry that exposes an application via a public port or domain.
 
-For TCP-like protocols, leave --port 0 to have the server auto-allocate one.
-For HTTP entries, pass --domain to route by host header.`,
+For TCP-like protocols (tcp|ssh|rdp|mysql|postgresql|redis|mongodb), leave
+--port at 0 to have the server auto-allocate one.
+
+For HTTP entries, the server requires a "domain label" — the subdomain under
+liaison.cloud. Pass --domain-label explicitly, or leave it empty and the CLI
+will derive one from --name. --domain is only needed when binding a custom
+BYO domain on top of the label.
+
+Examples:
+  # HTTP — auto-derive label from --name (result: <name>-<user>.liaison.cloud)
+  liaison proxy create --name ongrid-web --protocol http --application-id 100077
+
+  # HTTP — pick an explicit label
+  liaison proxy create --name web --protocol http --domain-label myapp --application-id 100077
+
+  # SSH — server allocates a public port
+  liaison proxy create --name my-ssh --protocol ssh --application-id 100033`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r, err := current()
 			if err != nil {
@@ -137,8 +153,19 @@ For HTTP entries, pass --domain to route by host header.`,
 				"description":    description,
 				"protocol":       protocol,
 				"port":           port,
-				"domain":         domain,
 				"application_id": applicationID,
+			}
+			if domain != "" {
+				body["domain"] = domain
+			}
+			if protocol == "http" {
+				label := domainLabel
+				if label == "" {
+					label = name
+				}
+				body["domain_label"] = label
+			} else if domainLabel != "" {
+				body["domain_label"] = domainLabel
 			}
 			data, err := r.client.Post("/api/v1/proxies", body)
 			if err != nil {
@@ -150,8 +177,9 @@ For HTTP entries, pass --domain to route by host header.`,
 	cmd.Flags().StringVar(&name, "name", "", "entry name (required)")
 	cmd.Flags().StringVar(&description, "description", "", "description")
 	cmd.Flags().StringVar(&protocol, "protocol", "tcp", "tcp|http|ssh|rdp|mysql|postgresql|redis|mongodb")
-	cmd.Flags().IntVar(&port, "port", 0, "public port (0 = auto-allocate)")
-	cmd.Flags().StringVar(&domain, "domain", "", "public domain (http only)")
+	cmd.Flags().IntVar(&port, "port", 0, "public port (0 = auto-allocate; ignored for http)")
+	cmd.Flags().StringVar(&domainLabel, "domain-label", "", "subdomain label for http entries (defaults to --name)")
+	cmd.Flags().StringVar(&domain, "domain", "", "full custom domain for http entries (optional; requires DNS pointing at liaison.cloud)")
 	cmd.Flags().Uint64Var(&applicationID, "application-id", 0, "backend application ID (required)")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
