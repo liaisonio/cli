@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 
@@ -24,6 +25,7 @@ func newProxyCmd() *cobra.Command {
 		newProxyCreateCmd(),
 		newProxyUpdateCmd(),
 		newProxyDeleteCmd(),
+		newProxyShareCmd(),
 	)
 	return cmd
 }
@@ -236,6 +238,57 @@ entry offline without deleting it.`,
 	cmd.Flags().StringVar(&description, "description", "", "new description")
 	cmd.Flags().IntVar(&port, "port", 0, "new port")
 	cmd.Flags().StringVar(&status, "status", "", "running|stopped")
+	return cmd
+}
+
+func newProxyShareCmd() *cobra.Command {
+	var redirect string
+	cmd := &cobra.Command{
+		Use:   "share <id>",
+		Short: "Generate a temporary share link for an entry",
+		Long: `Generate a temporary share link that lets anyone (no liaison.cloud login
+required) access the entry for a limited time.
+
+HTTP entries are gated by a liaison.cloud login by default — only the owner
+can view them. ` + "`proxy share`" + ` calls the server to mint a time-limited
+share URL under /s/<code> that seeds a scoped session cookie and redirects
+the guest to the entry. The link expires server-side (typically ~1h); hand
+the returned ` + "`share_url`" + ` to the person you want to let in.
+
+Share links are single-entry scoped and cannot be revoked individually —
+they simply expire. Do not post them publicly.
+
+Examples:
+  # Basic — share entry 100057, print JSON with share_url + expires_at
+  liaison proxy share 100057
+
+  # Send the guest straight to a specific path after the redirect
+  liaison proxy share 100057 --redirect /admin
+
+  # Extract just the share URL
+  liaison proxy share 100057 | jq -r .share_url`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			r, err := current()
+			if err != nil {
+				return err
+			}
+			id, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid entry id %q: %w", args[0], err)
+			}
+			var q url.Values
+			if redirect != "" {
+				q = url.Values{"redirect": []string{redirect}}
+			}
+			data, err := r.client.Do(http.MethodPost, fmt.Sprintf("/api/v1/proxies/%d/share_session", id), q, nil)
+			if err != nil {
+				return err
+			}
+			return output.Print(cmd.OutOrStdout(), r.fmt, data)
+		},
+	}
+	cmd.Flags().StringVar(&redirect, "redirect", "", "path the guest lands on after the share redirect (default: /)")
 	return cmd
 }
 

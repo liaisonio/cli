@@ -287,6 +287,8 @@ liaison application delete 123 --yes
 liaison proxy list
 liaison proxy create --name my-ssh-entry --protocol ssh --application-id 123
 liaison proxy update 456 --status stopped
+liaison proxy share 456                              # temp share link (http entries, ~1h)
+liaison proxy share 456 --redirect /admin            # guest lands on /admin
 liaison proxy delete 456 --yes
 
 # Devices

@@ -33,6 +33,44 @@ An entry has its own `status`:
 - `running` — actively accepting traffic
 - `stopped` — taken offline without deleting
 
+## Access model (IMPORTANT — set user expectations)
+
+Who can reach an entry **depends on protocol**, and this catches agents out:
+
+| Protocol | Default access | To let other people in |
+|---|---|---|
+| `http` / https entries | **Owner-only**: anonymous visitors are 302-redirected to `liaison.cloud/dashboard/login`. Only the token owner sees the site after logging in. | `liaison proxy share <id>` → temporary share URL (see below) |
+| `tcp` / `ssh` / `mysql` / `postgresql` / `redis` / `mongodb` / `rdp` | **Open to anyone** who can reach `liaison.cloud:<port>` (protect with app-level auth, e.g. SSH keys, DB passwords) | No share flow needed — just hand over host+port |
+
+**There is currently no "permanent public" toggle for HTTP entries.** Do not tell the user "your site is live on the internet" without qualifying — say "live at `<url>` (you'll be asked to log in to liaison.cloud the first time)" for HTTP, or just "live at `liaison.cloud:<port>`" for TCP-like.
+
+### Temporary share links (HTTP entries)
+
+`liaison proxy share <id>` mints a short-lived share URL that bypasses the login gate for whoever opens it:
+
+```bash
+liaison proxy share 100057
+# => {
+#      "share_url":  "https://foo-user.liaison.cloud/s/SotmL3rsRhu9zyEGlyAW",
+#      "access_url": "https://foo-user.liaison.cloud",
+#      "expires_at": "2026-04-18 10:38:18"
+#    }
+
+# Send the guest to a specific path
+liaison proxy share 100057 --redirect /admin
+
+# Just grab the URL
+liaison proxy share 100057 | jq -r .share_url
+```
+
+Rules:
+- The `share_url` lives on the entry's **own hostname** (`<label>-<user>.liaison.cloud/s/<code>`), not on `liaison.cloud/s/...`. The `/s/<code>` endpoint seeds a Set-Cookie and 302s to the entry root.
+- **Guests must follow the redirect with cookies enabled** — browsers do this automatically; `curl` needs `-L -c cookies.txt -b cookies.txt`.
+- The link **expires server-side** (default ~1 hour from creation). There's no "revoke one link" — wait for expiry or rotate by minting a new one.
+- Each open of `/s/<code>` seeds a cookie scoped to that one entry only — share URLs can't escalate to other entries.
+- Minting a share requires you (the CLI owner) to already have access. You can't share entries you don't own.
+- Only meaningful for `http` entries. TCP-style entries have no auth gate to bypass.
+
 ## Commands
 
 All commands under `liaison proxy`. Aliases: `proxies`, `entry`, `entries`. (The CLI uses "proxy" internally for historical reasons; the user-facing dashboard says "entry".)
@@ -132,6 +170,21 @@ liaison proxy update 10 --description "new"    # rename / re-describe
 
 `--status` accepts the literal strings `running` and `stopped` (NOT integers — different from connector update which takes numbers/keywords).
 
+### Share (HTTP entries only)
+
+Mint a temporary share URL for an HTTP entry so a guest can view it without logging in. See **Access model** above for the full story.
+
+```bash
+liaison proxy share 100057                      # default JSON
+liaison proxy share 100057 --redirect /admin    # guest lands on /admin after redirect
+liaison proxy share 100057 | jq -r .share_url   # extract the URL for scripting
+```
+
+Response fields:
+- `share_url` — the `/s/<code>` URL to send the guest (this is what you share)
+- `access_url` — the entry's own URL (only useful for the owner post-bootstrap)
+- `expires_at` — RFC3339 timestamp; after this the link 410's with "share link expired"
+
 ### Delete
 
 **Requires `--yes`.**
@@ -152,6 +205,8 @@ The associated application is left alone; only the public exposure is removed.
 | "Take entry 10 offline temporarily" | `liaison proxy update 10 --status stopped` |
 | "Bring entry 10 back" | `liaison proxy update 10 --status running` |
 | "Remove the public exposure for X" | `liaison proxy delete <id> --yes` (the application stays) |
+| "Send this HTTP site to a friend" / "give someone temporary access" | `liaison proxy share <id>` — hand them `share_url` (~1h validity). Only meaningful for `http` entries. |
+| "Is my site public?" | For `http`: **no** — it requires liaison.cloud login by default. Use `proxy share` for a temp link, or tell the user to log in themselves. For `tcp`/`ssh`/etc.: yes, anyone who can reach `liaison.cloud:<port>` can connect. |
 
 ## Common mistakes to avoid
 
