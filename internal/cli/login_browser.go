@@ -105,7 +105,7 @@ func browserLogin(server, name string, noBrowser bool, out io.Writer) (string, e
 		_ = listener.Close()
 
 		fmt.Fprintf(out, "\nCould not open a browser (%v).\n", err)
-		fmt.Fprintln(out, "Falling back to manual token entry.\n")
+		fmt.Fprintln(out, "Falling back to manual token entry.")
 		return manualTokenLogin(server, out)
 	}
 
