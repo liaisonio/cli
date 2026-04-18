@@ -1,6 +1,6 @@
 {
   "name": "@liaisonio/cli",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Liaison Cloud CLI — manage connectors, entries, and applications from the command line",
   "keywords": ["liaison", "liaison-cloud", "cli", "edge", "tunnel", "agent"],
   "homepage": "https://liaison.cloud",
