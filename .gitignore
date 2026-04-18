@@ -17,3 +17,4 @@ npm/README.md
 .vscode/
 .idea/
 .DS_Store
+spec/
